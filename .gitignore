@@ -19,3 +19,7 @@ frontend/.env
 # Local reference project used for learning, not part of this demo
 zhilv-yuntu-main/
 zhilv-yuntu-main.zip
+
+# Local package prepared for manual Hugging Face upload
+hf-space-backend-upload/
+hf-space-backend-upload.zip
