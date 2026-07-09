@@ -10,7 +10,7 @@ services:
       - key: APP_NAME
         value: HelloAgents Trip Planner
       - key: APP_VERSION
-        value: 0.1.0
+        value: 1.0.1
       - key: USE_MOCK_LLM
         value: false
       - key: USE_MOCK_TOOLS
