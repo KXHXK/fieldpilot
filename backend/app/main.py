@@ -10,9 +10,17 @@ app = FastAPI(
     version=settings.app_version,
 )
 
+allowed_origins = sorted(
+    {
+        *settings.cors_origins,
+        "https://kxh-trip-planner.netlify.app",
+    }
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.netlify\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,4 +35,3 @@ def root():
         "name": settings.app_name,
         "message": "HelloAgents Trip Planner backend is running.",
     }
-
