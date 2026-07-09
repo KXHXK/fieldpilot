@@ -1,3 +1,10 @@
+---
+title: Kxh Trip Planner Api
+sdk: gradio
+app_file: app.py
+pinned: false
+---
+
 # HelloAgents Trip Planner
 
 这是跟随 Datawhale Hello Agents 第十三章“智能旅行助手”逐步实现的教学项目。
