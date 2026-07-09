@@ -1,6 +1,6 @@
 import type { TripPlan, TripPlanRequest } from "../types/trip";
 
-const API_BASE_URL = "/api";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
 export interface HealthResponse {
   status: string;
