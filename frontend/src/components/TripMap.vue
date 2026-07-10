@@ -19,6 +19,9 @@ const props = defineProps<{
 declare global {
   interface Window {
     AMap?: any;
+    _AMapSecurityConfig?: {
+      securityJsCode?: string;
+    };
   }
 }
 
@@ -29,6 +32,7 @@ const routeLine = ref<any>(null);
 const loadError = ref("");
 
 const amapKey = import.meta.env.VITE_AMAP_JS_KEY as string | undefined;
+const amapSecurityCode = import.meta.env.VITE_AMAP_JS_SECURITY_CODE as string | undefined;
 
 const validPoints = computed(() =>
   props.points.filter((point) => point.longitude != null && point.latitude != null)
@@ -138,6 +142,12 @@ function ensureMapScript(): Promise<void> {
         once: true,
       });
       return;
+    }
+
+    if (amapSecurityCode) {
+      window._AMapSecurityConfig = {
+        securityJsCode: amapSecurityCode,
+      };
     }
 
     const script = document.createElement("script");

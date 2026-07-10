@@ -88,5 +88,9 @@ class LLMService:
             )
             return response.choices[0].message.content or ""
         except Exception as exc:
-            logger.warning("Kimi summary request failed: error_type=%s", type(exc).__name__)
+            logger.warning(
+                "Kimi summary request failed: error_type=%s, status_code=%s",
+                type(exc).__name__,
+                getattr(exc, "status_code", None),
+            )
             return "已根据天气、景点与酒店搜索结果生成行程。Kimi 总结暂不可用，建议稍后重试。"

@@ -24,11 +24,9 @@ class ItineraryPlanAgent:
             current = start + timedelta(days=index)
             day_attractions = unique_attractions[used_count : used_count + attractions_per_day]
             used_count += attractions_per_day
-            if not day_attractions and unique_attractions:
-                day_attractions = [unique_attractions[index % len(unique_attractions)]]
 
             weather = weather_info[min(index, len(weather_info) - 1)] if weather_info else None
-            attraction_names = "、".join(item.name for item in day_attractions) or "城市代表性区域"
+            attraction_names = "、".join(item.name for item in day_attractions) or "酒店周边街区与自由活动"
 
             plans.append(
                 DayPlan(

@@ -96,20 +96,26 @@ def _pick_weather_label(answer: str) -> str:
 
     lower_answer = answer.lower()
     english_labels = [
+        ("partly cloudy", "晴间多云"),
+        ("partly", "晴间多云"),
+        ("mostly cloudy", "多云"),
         ("thunder", "雷阵雨"),
         ("storm", "暴雨"),
         ("shower", "阵雨"),
         ("rain", "小雨"),
+        ("fog", "雾"),
+        ("haze", "霾"),
         ("cloud", "多云"),
         ("overcast", "阴"),
         ("sunny", "晴"),
         ("clear", "晴"),
+        ("hot", "炎热"),
         ("snow", "雪"),
     ]
     for keyword, label in english_labels:
         if keyword in lower_answer:
             return label
-    return "暂无天气摘要"
+    return "天气现象待确认"
 
 
 def _pick_wind_direction(answer: str) -> str:
