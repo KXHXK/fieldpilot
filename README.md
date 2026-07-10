@@ -15,6 +15,8 @@ pinned: false
 
 前端仍部署在 Netlify；腾讯云后端完成部署后，只需要把 Netlify 的 `VITE_API_BASE_URL` 改为 `https://你的腾讯云域名/api` 并重新发布前端。
 
+如需显示可交互的高德地图，还需要在 Netlify 配置 `VITE_AMAP_JS_KEY` 和 `VITE_AMAP_JS_SECURITY_CODE`。这两项来自高德控制台中单独创建的“Web端（JS API）”Key，不是后端的 Web 服务 Key。
+
 当前进度：`13.6 功能实现详解`。本阶段目标不是一次性做完整成品，而是按教程顺序熟悉智能旅行助手的工程结构、数据模型、多 Agent 协作、工具封装、前端页面流转和核心交互功能。
 
 ## 环境要求

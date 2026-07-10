@@ -40,7 +40,7 @@ class UnsplashService:
                     "per_page": per_page,
                     "client_id": self.access_key,
                 },
-                timeout=10,
+                timeout=6,
             )
             response.raise_for_status()
             data = response.json()
@@ -68,19 +68,15 @@ class UnsplashService:
         photos = self.search_photos(query=query, per_page=1)
         return photos[0].get("url") if photos else None
 
-    def get_attraction_photo_url(self, city: str, category: str | None) -> str | None:
-        """Get a safer generic image by city and attraction category."""
+    def get_attraction_photo_url(
+        self,
+        city: str,
+        attraction_name: str,
+        category: str | None,
+    ) -> str | None:
+        """Get one real attraction image without serial fallback retries."""
         category_query = _category_to_unsplash_query(category)
-        queries = [
-            f"{city} {category_query}",
-            f"{city} landmark",
-            f"{city} travel",
-        ]
-        for query in queries:
-            url = self.get_photo_url(query)
-            if url:
-                return url
-        return None
+        return self.get_photo_url(f"{city} {attraction_name} {category_query}")
 
 
 def get_unsplash_service() -> UnsplashService:

@@ -136,7 +136,7 @@ class AmapMCPService:
         if not self.api_key or not attractions:
             return None
 
-        visible_attractions = _unique_attractions(attractions)[:1]
+        visible_attractions = _unique_attractions(attractions)[:10]
         if not visible_attractions:
             return None
 
