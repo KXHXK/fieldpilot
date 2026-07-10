@@ -1,6 +1,6 @@
 import re
+from concurrent.futures import ThreadPoolExecutor
 
-import requests
 from tavily import TavilyClient
 
 from app.config import settings
@@ -19,33 +19,34 @@ class TavilyWeatherService:
         if self.use_mock or not self.client:
             return []
 
-        weather_items: list[WeatherInfo] = []
-        for date_value in dates:
-            query = (
-                f"{city} {date_value} 天气预报，白天天气、夜间天气、"
-                "最高温、最低温、风向、风力"
-            )
-            answer = self._safe_search(query)
-            weather_items.append(_weather_from_answer(date_value, answer))
-        return weather_items
+        # Each date needs an independent real-time search, but running them
+        # serially makes a multi-day request exceed the cloud gateway timeout.
+        worker_count = min(len(dates), 3)
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            return list(executor.map(lambda date_value: self._get_weather_item(city, date_value), dates))
+
+    def _get_weather_item(self, city: str, date_value: str) -> WeatherInfo:
+        query = (
+            f"{city} {date_value} 天气预报，白天天气、夜间天气、"
+            "最高温、最低温、风向、风力"
+        )
+        return _weather_from_answer(date_value, self._safe_search(query))
 
     def _safe_search(self, query: str) -> str:
         if not self.client:
             return ""
 
-        for _ in range(2):
-            try:
-                response = self.client.search(
-                    query=query,
-                    search_depth="basic",
-                    include_answer=True,
-                    max_results=3,
-                    timeout=20,
-                )
-                return response.get("answer") or _join_result_content(response)
-            except (requests.RequestException, Exception):
-                continue
-        return ""
+        try:
+            response = self.client.search(
+                query=query,
+                search_depth="basic",
+                include_answer=True,
+                max_results=3,
+                timeout=8,
+            )
+            return response.get("answer") or _join_result_content(response)
+        except Exception:
+            return ""
 
 
 def _join_result_content(response: dict) -> str:

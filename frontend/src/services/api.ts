@@ -24,7 +24,9 @@ export async function generateTripPlan(request: TripPlanRequest): Promise<TripPl
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    const errorBody = await response.json().catch(() => null);
+    const detail = typeof errorBody?.detail === "string" ? `: ${errorBody.detail}` : "";
+    throw new Error(`HTTP ${response.status}${detail}`);
   }
 
   return response.json();

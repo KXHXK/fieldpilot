@@ -66,7 +66,8 @@ async function handleSubmit() {
     sessionStorage.setItem("tripPlan", JSON.stringify(tripPlan));
     await router.push({ name: "result" });
   } catch (error) {
-    errorMessage.value = "生成规划失败，请确认后端服务已经启动，或稍后重试。";
+    const reason = error instanceof Error ? `（${error.message}）` : "";
+    errorMessage.value = `生成规划失败${reason}，请稍后重试。`;
   } finally {
     stopProgress();
     loading.value = false;
