@@ -9,6 +9,12 @@ pinned: false
 
 这是跟随 Datawhale Hello Agents 第十三章“智能旅行助手”逐步实现的教学项目。
 
+## 1.0.1 国内后端部署
+
+1.0.1 将后端部署目标调整为腾讯云 CloudBase 云托管，解决此前中国大陆浏览器访问 Vercel 后端可能超时、需要 VPN 的问题。完整部署步骤见 [DEPLOY_TENCENT_CLOUDBASE.md](DEPLOY_TENCENT_CLOUDBASE.md)。
+
+前端仍部署在 Netlify；腾讯云后端完成部署后，只需要把 Netlify 的 `VITE_API_BASE_URL` 改为 `https://你的腾讯云域名/api` 并重新发布前端。
+
 当前进度：`13.6 功能实现详解`。本阶段目标不是一次性做完整成品，而是按教程顺序熟悉智能旅行助手的工程结构、数据模型、多 Agent 协作、工具封装、前端页面流转和核心交互功能。
 
 ## 环境要求
