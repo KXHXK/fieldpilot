@@ -7,6 +7,19 @@ pinned: false
 
 # HelloAgents Trip Planner
 
+HelloAgents Trip Planner is an educational multi-agent travel planning
+application built with FastAPI, Vue 3, TypeScript, and external travel APIs.
+It coordinates specialized agents for weather, attractions, hotels, and
+itinerary planning, and supports mock services for local development without
+consuming API quotas.
+
+- [Live frontend](https://helloagents-trip-planner-kxh.vercel.app)
+- Backend: Python, FastAPI, Pydantic, and LLM/tool integrations
+- Frontend: Vue 3, TypeScript, Vite, and AMap visualization
+- Project status: learning project based on Datawhale Hello Agents Chapter 13
+
+## 中文说明
+
 这是跟随 Datawhale Hello Agents 第十三章“智能旅行助手”逐步实现的教学项目。
 
 ## 1.0.1 国内后端部署
