@@ -13,7 +13,6 @@ It coordinates specialized agents for weather, attractions, hotels, and
 itinerary planning, and supports mock services for local development without
 consuming API quotas.
 
-- [Live frontend](https://helloagents-trip-planner-kxh.vercel.app)
 - Backend: Python, FastAPI, Pydantic, and LLM/tool integrations
 - Frontend: Vue 3, TypeScript, Vite, and AMap visualization
 - Project status: learning project based on Datawhale Hello Agents Chapter 13
