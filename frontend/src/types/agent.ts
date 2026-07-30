@@ -24,9 +24,41 @@ export interface AgentTrace {
 export interface InterpretMissionResponse {
   status: InterpretationStatus;
   ready_for_submission: boolean;
-  draft: Record<string, unknown>;
+  draft: MissionDraft;
   clarifications: ClarificationQuestion[];
   safety_flags: string[];
   confidence: number;
   trace: AgentTrace;
+}
+
+export interface MissionDraft {
+  origin: { name: string | null; address: string | null; city: string | null };
+  destination_city: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  timezone: string;
+  urgency: "tight" | "balanced" | "flexible";
+  visits: Array<{
+    name: string | null;
+    address: string | null;
+    city: string | null;
+    window_start: string | null;
+    window_end: string | null;
+    duration_minutes: number | null;
+    priority: string;
+    notes: string;
+  }>;
+  expense_policy: {
+    policy_id: string;
+    policy_version: string;
+    allowed_rail_classes: string[] | null;
+    allowed_flight_classes: string[] | null;
+    hotel_nightly_cap_yuan: number | null;
+    meal_daily_cap_yuan: number | null;
+    local_transport_daily_cap_yuan: number | null;
+    trip_total_cap_yuan: number | null;
+  };
+  preferred_intercity_modes: string[];
+  preferred_local_modes: string[];
+  notes: string;
 }

@@ -1,55 +1,68 @@
 # FieldPilot 架构与技术取舍
 
-## 1. 输入、输出与成功示例
+## 1. 问题边界
 
-输入是城市、执行周期、行业、目标场所类型、任务目标、预算、交通方式和驻点偏好。输出是带来源状态的目标点位、每日环境风险、驻点建议、不重复日程、成本拆分、警告和工具调用状态。
-
-上海 3 日示例的成功条件：
-
-1. 请求通过 Pydantic 校验，周期不超过 7 天。
-2. 产生 3 个日期对应的每日方案。
-3. 6 个已分配点位 ID 不重复。
-4. 计划成本等于四项明细之和，并显示相对预算的余量。
-5. Mock 或外部服务降级不会伪装成实时成功。
-6. 前端能编辑、导出并恢复当前结果。
+FieldPilot 处理 1～7 天、1～6 个工作地点的跨城外勤：任务有时间窗和持续时间，公司政策限制交通等级、酒店、餐补、市内交通与总预算，途中变更需要留下审计并生成可比较的新版本。系统不购票、订房、叫车或提交报销。
 
 ## 2. 当前架构
 
 ```mermaid
 flowchart LR
-    U["Vue 3 结构化表单"] --> API["FastAPI / Pydantic"]
-    API --> C["FieldPilotCoordinator"]
-    C -->|并行| T["TargetDiscoveryAgent"]
-    C -->|并行| R["FieldRiskAgent"]
-    T --> AM["高德适配 / 合成回退"]
-    R --> TV["Tavily 适配 / 固定风险回退"]
-    T --> B["BaseLocationAgent"]
-    R --> P["TaskPlanningAgent"]
-    B --> P
-    P --> D["确定性成本与去重校验"]
-    D --> L["可选 LLM 受约束总结"]
-    L --> O["FieldTaskPlan + 工具状态 + 警告"]
-    O --> W["结果工作台 / 编辑 / 导出"]
+    UI["Vue 3 工作台"] --> API["FastAPI / Pydantic"]
+    API --> AG["PydanticAI Interpreter"]
+    AG --> MS["Mission Application Service"]
+    MS --> CP["Candidate Provider"]
+    CP --> AM["Amap geo / route"]
+    CP --> FX["Rail / flight / hotel fixtures"]
+    MS --> PE["Policy Engine"]
+    MS --> PL["Bounded Beam Planner"]
+    PL --> VE["Independent Verifier"]
+    VE --> DB["Mission / Snapshot / Revision / Event"]
+    DB --> UI
 ```
 
-## 3. 为什么当前不引入重型编排框架
+Agent 只把自然语言转为 `MissionDraft` 或澄清问题，工具数固定为 0。它不接触数据库、HTTP、文件和预订动作。应用服务将已确认草案转成 Mission；Provider 采集候选；确定性规划器计算方案；Verifier 在写入修订前独立复算不变量。
 
-本机规划的另外三个项目原本分别包含 CrewAI Flows、LlamaIndex Workflows/Pydantic Evals、多模态检索和实验编排。FieldPilot 的今天目标是形成第二个可运行求职项目，而不是把框架名装进依赖文件。
+## 3. 为什么只使用 PydanticAI
 
-当前流程只有一个清晰的有界 DAG：点位和风险并行收集，随后选择驻点、分配任务、计算成本、可选总结。手写 Coordinator 能直接暴露并发、失败和数据契约，测试成本最低。只有当后续出现持久化恢复、复杂路由或真实证据检索需求时，才引入对应框架。
+- 需要：类型化结构输出、模型供应商适配、请求/Token 限额与可测试的模型边界，PydanticAI 正好覆盖。
+- 不需要 CrewAI Flows：当前只有一个语义 Agent，状态与恢复由数据库 Mission/Revision 状态机承担；引入角色对话只会增加不可控路径。
+- 不需要 LlamaIndex：当前没有需要引用的 SOP、票据或企业知识库；为一份报销结构表建立 RAG 没有收益。
+- 不引入 Pydantic Evals 包：已有版本化 JSONL/JSON 固定集和确定性评测脚本。只有需要实验矩阵、评测后端或系统化报告时才迁移。
 
-## 4. 可靠性边界
+## 4. 规划与验证
 
-- 外部点位和环境检索各自失败时回退，并通过 `ToolStatus.status=degraded` 告知前端。
-- Mock 模式使用 `status=mock`，页面显示“非实时事实”警告。
-- 高德请求超时为 8 秒；Tavily 多日期查询最多 3 个线程并发、单次 8 秒；模型客户端 15 秒超时且关闭 SDK 自动重试。
-- LLM 失败不会丢失点位、风险、日程和成本。
-- 点位以 `(name, address)` 去重；日程只消费去重结果，不循环复用旧点位。
-- 预算和日程数值由确定性代码生成，不由模型计算。
+Planner 对任务顺序、跨城候选和住宿候选进行有界搜索，根据紧密程度调整迟到风险、成本、换乘、步行和政策余量权重，最多返回三个选项。它是可解释的启发式搜索，不声称全局最优。
 
-## 5. 安全与数据
+Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出结构化判定。Verifier 不复用 Planner 的“结论”，独立检查：
 
-- `.env`、虚拟环境、构建产物和依赖目录不会进入版本控制。
-- 示例点位是带 `synthetic` 来源标记的合成数据，不冒充真实门店。
-- 模型 Prompt 只接收已结构化的计划摘要，不包含密钥，也不能触发任意工具或写操作。
-- 当前没有账号、数据库、上传、审批和真实执行动作；因此也不声称具备生产 IAM、多租户或审计合规能力。
+- 每个任务恰好出现一次；
+- 任务落在时间窗且行程段不重叠；
+- 往返交通与住宿完整；
+- 分类成本之和、预算余量和规则结论一致。
+
+## 5. Provider 与真实/模拟边界
+
+`CandidateProvider` 隔离规划器与数据源。高德适配实现地理编码和驾车/出租车、步行、骑行、公交路线，具备异步调用、有限并发、超时、一次重试、调用预算、缓存与 in-flight 合并。单个方式失败时只降级该方式，并在 segment、warning 和 ProviderSnapshot 中记录 `live / mixed / fixture` 与失败类别。
+
+铁路、航班、酒店当前为版本固定 Fixture，不抓取 12306 内部接口，也不冒充实时库存或价格。高德和 LLM 的代码契约已测试，但本机无真实 Key，尚未做公网验收。
+
+## 6. 状态、幂等和重规划
+
+- Agent：同一 `request_id + input_fingerprint` 重放同一 trace；不同输入冲突。
+- Plan：`request_id` 只表示 API 幂等，`input_event_id` 表示业务触发源；复用 request_id 但参数不同会冲突。
+- Activation：调用方提交 `expected_active_revision`，过期写入返回 409。
+- Event：事件 ID、类型、基线和 payload 必须完全一致才算重放。
+- Applied events：任务改期/取消/新增/延长、预算和偏好在同一事务内修改事实并保存 before/after 字段。
+- Recorded-only events：天气与交通中断会留痕，但在候选过滤能力接入前不会标记为已应用。
+- Revision diff：比较首选方案的稳定任务/候选身份，返回新增、删除、变化、保留段数，以及成本、评分和告警增量。
+
+当前重规划会重新计算整个未锁定事实集合；代码会拒绝修改 locked/completed task，但尚未实现严格的“保留已执行前缀、只求解后缀”，因此文档与简历不宣称增量最优重算。
+
+## 7. 数据与可观测性
+
+SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、ProviderSnapshot、ReplanEvent 和 AgentRun。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。外部快照不保存 API Key 或带 Key 的完整 URL。
+
+## 8. 交付边界
+
+本地已验证 SQLite、38 项 Pytest、三版 Alembic 往返与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。

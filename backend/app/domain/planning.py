@@ -187,6 +187,7 @@ class PlanBundle(StrictModel):
 class PlanGenerationRequest(StrictModel):
     request_id: str = Field(min_length=8, max_length=120)
     based_on_revision: int | None = Field(default=None, ge=1)
+    input_event_id: str | None = Field(default=None, min_length=8, max_length=120)
 
 
 class PlanRevisionRead(StrictModel):
@@ -195,10 +196,31 @@ class PlanRevisionRead(StrictModel):
     revision: int
     based_on_revision: int | None
     request_id: str
+    input_event_id: str | None
     status: RevisionStatus
     bundle: PlanBundle
     idempotent_replay: bool = False
     created_at: datetime
+
+
+class SegmentChange(StrictModel):
+    identity: str
+    change_type: str
+    before: PlanSegment | None = None
+    after: PlanSegment | None = None
+
+
+class RevisionDiffRead(StrictModel):
+    mission_id: str
+    from_revision: int
+    to_revision: int
+    input_event_id: str | None
+    changes: list[SegmentChange]
+    preserved_segment_count: int = Field(ge=0)
+    cost_delta_yuan: int
+    score_delta: float
+    warnings_added: list[str] = Field(default_factory=list)
+    warnings_removed: list[str] = Field(default_factory=list)
 
 
 class ActivateRevisionRequest(StrictModel):

@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fieldpilot
+      POSTGRES_USER: fieldpilot
+      POSTGRES_PASSWORD: fieldpilot-local-only
+    volumes:
+      - fieldpilot-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fieldpilot -d fieldpilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://fieldpilot:fieldpilot-local-only@db:5432/fieldpilot
+      DATABASE_AUTO_CREATE: "false"
+      USE_MOCK_TOOLS: "true"
+      USE_MOCK_LLM: "true"
+      LOCAL_ROUTE_PROVIDER: fixture
+      CORS_ORIGINS: http://localhost:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  fieldpilot-db:

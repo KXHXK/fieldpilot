@@ -11,8 +11,10 @@ from app.domain import (
     ReplanEventCreate,
     ReplanEventRead,
     RevisionActivationRead,
+    RevisionDiffRead,
 )
 from app.services.mission_service import (
+    EventApplicationError,
     EventConflictError,
     MissionNotFoundError,
     RevisionConflictError,
@@ -21,11 +23,13 @@ from app.services.mission_service import (
     record_replan_event,
 )
 from app.services.planning_service import (
+    InputEventError,
     NoFeasiblePlanError,
     PlanRequestConflictError,
     PlanRevisionNotFoundError,
     PlanVerificationError,
     activate_plan_revision,
+    diff_plan_revisions,
     generate_plan_revision,
     get_plan_revision,
     list_plan_revisions,
@@ -77,6 +81,11 @@ async def create_replan_event_endpoint(
             status_code=409,
             detail={"code": "event_id_conflict", "message": str(exc)},
         ) from exc
+    except EventApplicationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 @router.post(
@@ -117,6 +126,11 @@ async def generate_plan_endpoint(
             status_code=409,
             detail={"code": "plan_request_conflict", "message": str(exc)},
         ) from exc
+    except InputEventError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 @router.get("/{mission_id}/revisions", response_model=list[PlanRevisionRead])
@@ -128,6 +142,26 @@ async def list_revisions_endpoint(
         return await list_plan_revisions(session, mission_id)
     except MissionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="任务不存在") from exc
+
+
+@router.get(
+    "/{mission_id}/revisions/{from_revision}/diff/{to_revision}",
+    response_model=RevisionDiffRead,
+)
+async def diff_revisions_endpoint(
+    mission_id: str,
+    from_revision: int,
+    to_revision: int,
+    session: AsyncSession = Depends(get_db_session),
+) -> RevisionDiffRead:
+    try:
+        return await diff_plan_revisions(
+            session, mission_id, from_revision, to_revision
+        )
+    except MissionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在") from exc
+    except PlanRevisionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="计划修订不存在") from exc
 
 
 @router.get(

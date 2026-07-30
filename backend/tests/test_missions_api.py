@@ -123,6 +123,156 @@ async def test_replan_event_is_idempotent(mission_payload: dict) -> None:
     assert first.json()["idempotent_replay"] is False
     assert second.json()["idempotent_replay"] is True
     assert first.json()["created_at"] == second.json()["created_at"]
+    assert first.json()["application_status"] == "applied"
+    assert len(first.json()["changed_fields"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_replan_event_applies_fact_change_and_rejects_request_id_reuse(
+    mission_payload: dict,
+) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post("/api/v1/missions", json=mission_payload)
+        mission = created.json()
+        mission_id = mission["mission_id"]
+        task_id = mission["visits"][0]["task_id"]
+        event = {
+            "event_id": "evt-apply-fact-001",
+            "event_type": "task_extended",
+            "based_on_revision": None,
+            "payload": {"task_id": task_id, "new_duration_minutes": 105},
+        }
+        applied = await client.post(
+            f"/api/v1/missions/{mission_id}/events", json=event
+        )
+        loaded = await client.get(f"/api/v1/missions/{mission_id}")
+        conflicting = deepcopy(event)
+        conflicting["payload"]["new_duration_minutes"] = 110
+        conflict = await client.post(
+            f"/api/v1/missions/{mission_id}/events", json=conflicting
+        )
+
+    assert applied.status_code == 200
+    assert loaded.json()["visits"][0]["duration_minutes"] == 105
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "event_id_conflict"
+
+
+@pytest.mark.asyncio
+async def test_external_signal_is_recorded_without_claiming_application(
+    mission_payload: dict,
+) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post("/api/v1/missions", json=mission_payload)
+        mission = created.json()
+        response = await client.post(
+            f"/api/v1/missions/{mission['mission_id']}/events",
+            json={
+                "event_id": "evt-weather-signal-001",
+                "event_type": "weather_risk",
+                "based_on_revision": None,
+                "payload": {
+                    "location": "杭州",
+                    "severity": "high",
+                    "affected_task_ids": [mission["visits"][0]["task_id"]],
+                    "summary": "暴雨风险，等待路线能力接入",
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["application_status"] == "recorded_only"
+    assert response.json()["changed_fields"] == []
+
+
+@pytest.mark.asyncio
+async def test_supported_events_update_budget_preferences_and_task_collection(
+    mission_payload: dict,
+) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post("/api/v1/missions", json=mission_payload)
+        original = created.json()
+        mission_id = original["mission_id"]
+        budget = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-budget-apply-001",
+                "event_type": "budget_changed",
+                "based_on_revision": None,
+                "payload": {"trip_total_cap_yuan": 1900},
+            },
+        )
+        preference = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-preference-apply-001",
+                "event_type": "preference_changed",
+                "based_on_revision": None,
+                "payload": {
+                    "transport_preferences": {
+                        "preferred_intercity_modes": ["rail"],
+                        "preferred_local_modes": ["taxi", "walking"],
+                        "minimum_transfer_minutes": 45,
+                        "allow_early_arrival_day": False,
+                    }
+                },
+            },
+        )
+        added = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-task-add-001",
+                "event_type": "task_added",
+                "based_on_revision": None,
+                "payload": {
+                    "visit": {
+                        "name": "新增回访",
+                        "location": {
+                            "name": "新增回访点",
+                            "address": "杭州市上城区解放路",
+                            "city": "杭州",
+                        },
+                        "window_start": "2026-08-07T13:30:00+08:00",
+                        "window_end": "2026-08-07T15:00:00+08:00",
+                        "duration_minutes": 60,
+                        "priority": "normal",
+                        "locked": False,
+                        "notes": "",
+                    }
+                },
+            },
+        )
+        cancelled = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-task-cancel-001",
+                "event_type": "task_cancelled",
+                "based_on_revision": None,
+                "payload": {
+                    "task_id": original["visits"][0]["task_id"],
+                    "reason": "客户取消",
+                },
+            },
+        )
+        loaded = await client.get(f"/api/v1/missions/{mission_id}")
+
+    responses = (budget, preference, added, cancelled)
+    assert all(item.status_code == 200 for item in responses), [
+        (item.status_code, item.text) for item in responses
+    ]
+    current = loaded.json()
+    assert current["expense_policy"]["trip_total_cap_yuan"] == 1900
+    assert current["transport_preferences"]["minimum_transfer_minutes"] == 45
+    assert any(item["name"] == "新增回访" for item in current["visits"])
+    assert original["visits"][0]["task_id"] not in {
+        item["task_id"] for item in current["visits"]
+    }
+    assert [item["position"] for item in current["visits"]] == list(
+        range(1, len(current["visits"]) + 1)
+    )
 
 
 @pytest.mark.asyncio

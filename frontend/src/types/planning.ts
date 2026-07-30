@@ -78,6 +78,7 @@ export interface PlanBundle {
 export interface PlanGenerationRequest {
   request_id: string;
   based_on_revision?: number | null;
+  input_event_id?: string | null;
 }
 
 export interface PlanRevision {
@@ -86,10 +87,31 @@ export interface PlanRevision {
   revision: number;
   based_on_revision?: number | null;
   request_id: string;
+  input_event_id?: string | null;
   status: RevisionStatus;
   bundle: PlanBundle;
   idempotent_replay: boolean;
   created_at: string;
+}
+
+export interface SegmentChange {
+  identity: string;
+  change_type: "added" | "removed" | "changed";
+  before?: PlanSegment | null;
+  after?: PlanSegment | null;
+}
+
+export interface RevisionDiff {
+  mission_id: string;
+  from_revision: number;
+  to_revision: number;
+  input_event_id?: string | null;
+  changes: SegmentChange[];
+  preserved_segment_count: number;
+  cost_delta_yuan: number;
+  score_delta: number;
+  warnings_added: string[];
+  warnings_removed: string[];
 }
 
 export interface RevisionActivationReceipt {

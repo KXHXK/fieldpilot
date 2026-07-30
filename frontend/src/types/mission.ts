@@ -105,5 +105,9 @@ export interface ReplanEventReceipt {
   based_on_revision?: number | null;
   accepted: boolean;
   idempotent_replay: boolean;
+  application_status: "applied" | "recorded_only";
+  changed_fields: Array<{ path: string; before: unknown; after: unknown }>;
+  requires_replan: boolean;
+  applied_at?: string | null;
   created_at: string;
 }

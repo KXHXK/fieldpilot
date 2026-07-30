@@ -7,7 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import MissionRecord, PlanRevisionRecord, ProviderSnapshotRecord
+from app.db.models import (
+    MissionRecord,
+    PlanRevisionRecord,
+    ProviderSnapshotRecord,
+    ReplanEventRecord,
+)
 from app.config import settings
 from app.domain import (
     ActivateRevisionRequest,
@@ -15,8 +20,10 @@ from app.domain import (
     PlanBundle,
     PlanGenerationRequest,
     PlanRevisionRead,
+    RevisionDiffRead,
     RevisionActivationRead,
     RevisionStatus,
+    SegmentChange,
 )
 from app.planning import (
     BoundedMissionPlanner,
@@ -39,6 +46,12 @@ class PlanRevisionNotFoundError(LookupError):
 
 class PlanRequestConflictError(RuntimeError):
     pass
+
+
+class InputEventError(RuntimeError):
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
 
 
 def _new_id(prefix: str) -> str:
@@ -64,6 +77,13 @@ async def generate_plan_revision(
     )
     existing = existing_result.scalar_one_or_none()
     if existing is not None:
+        if (
+            existing.based_on_revision != command.based_on_revision
+            or existing.input_event_id != command.input_event_id
+        ):
+            raise PlanRequestConflictError(
+                "request_id 已存在，但计划请求内容不一致"
+            )
         return _to_revision_read(existing, idempotent_replay=True)
 
     mission_record = await session.get(MissionRecord, mission_id)
@@ -73,6 +93,15 @@ async def generate_plan_revision(
         raise RevisionConflictError(
             command.based_on_revision, mission_record.active_revision
         )
+    if command.input_event_id is not None:
+        input_event = await session.get(ReplanEventRecord, command.input_event_id)
+        if input_event is None or input_event.mission_id != mission_id:
+            raise InputEventError("input_event_not_found", "触发事件不存在")
+        if input_event.based_on_revision != command.based_on_revision:
+            raise InputEventError(
+                "input_event_revision_mismatch",
+                "触发事件所基于的版本与计划请求不一致",
+            )
 
     mission = await get_mission(session, mission_id)
     provider = create_candidate_provider(settings)
@@ -139,7 +168,7 @@ async def generate_plan_revision(
         revision=revision_number,
         based_on_revision=command.based_on_revision,
         request_id=command.request_id,
-        input_event_id=None,
+        input_event_id=command.input_event_id,
         status=RevisionStatus.PROPOSED.value,
         plan_payload=bundle.model_dump(mode="json"),
     )
@@ -253,6 +282,90 @@ async def activate_plan_revision(
     )
 
 
+def _preferred_option(revision: PlanRevisionRead):
+    return next(
+        option
+        for option in revision.bundle.options
+        if option.option_id == revision.bundle.preferred_option_id
+    )
+
+
+def _indexed_segments(option) -> dict[str, object]:
+    indexed: dict[str, object] = {}
+    counts: dict[str, int] = {}
+    for segment in option.segments:
+        base = (
+            f"task:{segment.task_id}"
+            if segment.task_id
+            else f"candidate:{segment.candidate_id}"
+            if segment.candidate_id
+            else (
+                f"{segment.segment_type.value}:{segment.title}:"
+                f"{segment.from_ref or ''}:{segment.to_ref or ''}"
+            )
+        )
+        counts[base] = counts.get(base, 0) + 1
+        indexed[f"{base}#{counts[base]}"] = segment
+    return indexed
+
+
+async def diff_plan_revisions(
+    session: AsyncSession,
+    mission_id: str,
+    from_revision: int,
+    to_revision: int,
+) -> RevisionDiffRead:
+    if await session.get(MissionRecord, mission_id) is None:
+        raise MissionNotFoundError(mission_id)
+    before = await get_plan_revision(session, mission_id, from_revision)
+    after = await get_plan_revision(session, mission_id, to_revision)
+    before_option = _preferred_option(before)
+    after_option = _preferred_option(after)
+    before_segments = _indexed_segments(before_option)
+    after_segments = _indexed_segments(after_option)
+    changes: list[SegmentChange] = []
+    preserved = 0
+    for identity in sorted(before_segments.keys() | after_segments.keys()):
+        old = before_segments.get(identity)
+        new = after_segments.get(identity)
+        if old is None:
+            changes.append(
+                SegmentChange(identity=identity, change_type="added", after=new)
+            )
+        elif new is None:
+            changes.append(
+                SegmentChange(identity=identity, change_type="removed", before=old)
+            )
+        elif old.model_dump(mode="json") != new.model_dump(mode="json"):
+            changes.append(
+                SegmentChange(
+                    identity=identity,
+                    change_type="changed",
+                    before=old,
+                    after=new,
+                )
+            )
+        else:
+            preserved += 1
+    before_warnings = set(before_option.warnings)
+    after_warnings = set(after_option.warnings)
+    return RevisionDiffRead(
+        mission_id=mission_id,
+        from_revision=from_revision,
+        to_revision=to_revision,
+        input_event_id=after.input_event_id,
+        changes=changes,
+        preserved_segment_count=preserved,
+        cost_delta_yuan=(
+            after_option.costs.planned_total_yuan
+            - before_option.costs.planned_total_yuan
+        ),
+        score_delta=round(after_option.score.total - before_option.score.total, 2),
+        warnings_added=sorted(after_warnings - before_warnings),
+        warnings_removed=sorted(before_warnings - after_warnings),
+    )
+
+
 def _to_revision_read(
     revision: PlanRevisionRecord,
     *,
@@ -264,6 +377,7 @@ def _to_revision_read(
         revision=revision.revision,
         based_on_revision=revision.based_on_revision,
         request_id=revision.request_id,
+        input_event_id=revision.input_event_id,
         status=RevisionStatus(revision.status),
         bundle=PlanBundle.model_validate(revision.plan_payload),
         idempotent_replay=idempotent_replay,
@@ -273,10 +387,12 @@ def _to_revision_read(
 
 __all__ = [
     "NoFeasiblePlanError",
+    "InputEventError",
     "PlanRequestConflictError",
     "PlanRevisionNotFoundError",
     "PlanVerificationError",
     "activate_plan_revision",
+    "diff_plan_revisions",
     "generate_plan_revision",
     "get_plan_revision",
     "list_plan_revisions",

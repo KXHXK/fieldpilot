@@ -164,6 +164,15 @@ class ReplanEventRecord(Base):
     event_type: Mapped[str] = mapped_column(String(40))
     based_on_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     event_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    application_status: Mapped[str] = mapped_column(
+        String(20), default="recorded_only"
+    )
+    changed_fields: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now
     )

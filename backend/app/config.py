@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     llm_total_tokens_limit: int = Field(default=6000, ge=500, le=50_000)
     cors_origins: str = "http://localhost:5173"
     database_url: str = "sqlite+aiosqlite:///./fieldpilot.db"
-    database_auto_create: bool = True
+    database_auto_create: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

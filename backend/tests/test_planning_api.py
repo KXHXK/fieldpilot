@@ -96,6 +96,81 @@ async def test_plan_request_is_idempotent() -> None:
 
 
 @pytest.mark.asyncio
+async def test_event_linked_revision_exposes_explainable_diff() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission = await create_mission(client)
+        mission_id = mission["mission_id"]
+        first = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={"request_id": "plan-before-event-001", "based_on_revision": None},
+        )
+        assert first.status_code == 201, first.text
+        activated = await client.post(
+            f"/api/v1/missions/{mission_id}/revisions/1/activate",
+            json={"expected_active_revision": None},
+        )
+        assert activated.status_code == 200, activated.text
+        task_id = mission["visits"][1]["task_id"]
+        event_id = "evt-reschedule-for-diff-001"
+        event = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": event_id,
+                "event_type": "task_rescheduled",
+                "based_on_revision": 1,
+                "payload": {
+                    "task_id": task_id,
+                    "new_window_start": "2026-08-06T17:30:00+08:00",
+                    "new_window_end": "2026-08-06T19:30:00+08:00",
+                },
+            },
+        )
+        assert event.status_code == 200, event.text
+        second = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={
+                "request_id": "plan-after-event-001",
+                "based_on_revision": 1,
+                "input_event_id": event_id,
+            },
+        )
+        diff = await client.get(
+            f"/api/v1/missions/{mission_id}/revisions/1/diff/2"
+        )
+
+    assert second.status_code == 201, second.text
+    assert second.json()["input_event_id"] == event_id
+    assert diff.status_code == 200, diff.text
+    payload = diff.json()
+    assert payload["input_event_id"] == event_id
+    assert any(
+        change["identity"].startswith(f"task:{task_id}")
+        and change["change_type"] == "changed"
+        for change in payload["changes"]
+    )
+    assert payload["preserved_segment_count"] > 0
+
+
+@pytest.mark.asyncio
+async def test_plan_rejects_unknown_input_event() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission = await create_mission(client)
+        response = await client.post(
+            f"/api/v1/missions/{mission['mission_id']}/plans",
+            json={
+                "request_id": "plan-unknown-event-001",
+                "based_on_revision": None,
+                "input_event_id": "evt-does-not-exist",
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "input_event_not_found"
+
+
+@pytest.mark.asyncio
 async def test_activate_revision_and_reject_stale_activation() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

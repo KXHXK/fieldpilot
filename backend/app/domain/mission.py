@@ -47,6 +47,11 @@ class ReplanEventType(StrEnum):
     WEATHER_RISK = "weather_risk"
 
 
+class EventApplicationStatus(StrEnum):
+    APPLIED = "applied"
+    RECORDED_ONLY = "recorded_only"
+
+
 class LocationInput(StrictModel):
     name: str = Field(min_length=1, max_length=120)
     address: str = Field(min_length=1, max_length=240)
@@ -295,4 +300,8 @@ class ReplanEventRead(StrictModel):
     based_on_revision: int | None
     accepted: bool
     idempotent_replay: bool
+    application_status: EventApplicationStatus
+    changed_fields: list[dict[str, Any]] = Field(default_factory=list)
+    requires_replan: bool = True
+    applied_at: datetime | None = None
     created_at: datetime

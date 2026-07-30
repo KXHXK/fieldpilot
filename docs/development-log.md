@@ -239,3 +239,20 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 后端全量测试：`32 passed`；迁移 head 为 `20260730_0002`。
 
 下一步进入 Stage 5：先让受支持的 ReplanEvent 安全应用到 Mission facts，再生成带 `input_event_id` 的计划修订和结构化 revision diff。
+
+## 2026-07-30｜Target v1.0 Stage 5：事件应用与可解释重规划
+
+- ReplanEvent 增加 `application_status / changed_fields / applied_at`，事件 ID 重放必须同时匹配任务、类型、基线和 payload。
+- 任务改期/取消/新增/延长、预算和交通偏好在同一数据库事务内更新 Mission facts，并保存 before/after；locked/completed task 拒绝变更。
+- 天气和交通中断在尚未进入候选过滤器前只记录为 `recorded_only`，不冒充已经影响规划。
+- PlanGenerationRequest 增加 `input_event_id`，验证事件属于当前 Mission 且基线一致；同一 request_id 对应不同参数返回冲突。
+- 新增 Revision Diff，按稳定任务/候选身份输出 added/removed/changed、保持段数、成本/评分与告警差异。
+- 专项接口测试覆盖事实应用、严格幂等、recorded-only、事件关联修订、未知事件和 diff。
+
+## 2026-07-30｜Target v1.0 Stage 6：v1 工作台与交付配置
+
+- Vue 页面升级为“自然语言输入 -> Agent 草案/澄清 -> Mission -> 三方案比较 -> 来源/政策 -> 事件重规划 -> Revision Diff”的完整工作台。
+- 页面展示 Agent trace、模型/Prompt/耗时、segment provider/source mode、ProviderSnapshot ID 和 Fixture 警告。
+- 新增 PostgreSQL Compose、Nginx 反向代理、API migration-on-start 与 GitHub Actions 后端/迁移/前端验证流程。
+- 本机验证：`38 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 TypeScript 与 Vite 生产构建通过；`git diff --check` 通过。
+- 本机没有 Docker CLI，因此 Compose 和镜像只完成配置审查，不能写成已实际运行；真实高德和模型 Key 仍未测试。

@@ -1,36 +1,34 @@
-# FieldPilot｜城市外勤任务编排 Agent
+# FieldPilot｜跨城外勤任务编排 Agent
 
-FieldPilot 面向商务拓展、市场调研、巡店与线下执行人员，把执行城市、目标场所、环境风险、预算和任务目标整理为可编辑、可导出的每日外勤方案。
+FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地点、任务时间窗、紧密程度、交通偏好和公司报销规则转换为可验证、可比较、可动态重规划的执行方案。
 
-当前版本是可本地运行的 `0.1.0 MVP`。它采用混合式 Agent 工作流：确定性代码负责数据校验、点位去重、日期分配和成本计算，可选 LLM 仅对已经形成的结构化计划做受约束总结。系统不会让模型直接生成权威点位、计算成本或执行外部动作。
+当前分支是可本地运行的 `0.2.0-dev`。PydanticAI 单 Agent 只负责自然语言到严格 MissionDraft 的转换；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
-`feature/fieldpilot-v1-domain` 已完成目标版本的 Stage 1～4B：除领域、规划与高德路线治理外，单个 PydanticAI Agent 可将自由文本转成严格 MissionDraft 或最多三项澄清问题；AgentRun 保存输入指纹、结构化输出和用量摘要，并提供请求幂等与 trace 查询。高德和 LLM 真实密钥尚未实测；变更解析和 v1 前端页面仍未完成。
+`feature/fieldpilot-v1-domain` 已完成 Stage 1～6 的本地闭环：领域持久化、有限搜索规划、高德路线适配与降级、Agent 解析与审计、事件驱动重规划、修订差异和 Vue v1 工作台。高德与 LLM 真实密钥、Docker 容器和公网部署仍未在本机完成验证，相关能力不会冒充已上线。
 
 ## 已完成的业务闭环
 
 ```text
-Vue 3 表单
--> FastAPI / Pydantic 请求校验
--> FieldPilotCoordinator
--> 并行执行 FieldRiskAgent + TargetDiscoveryAgent
--> BaseLocationAgent
--> TaskPlanningAgent
--> 确定性成本计算 + 可选 LLM 摘要
--> 结构化 FieldTaskPlan
--> 点位、风险、日程、成本、工具状态展示
+自然语言输入 -> PydanticAI MissionDraft / 澄清问题
+-> Mission + VisitTask + ExpensePolicy 持久化
+-> Candidate Provider（高德 live/mixed 或显式 Fixture）
+-> PolicyEngine -> Bounded Planner -> Independent Verifier
+-> PlanRevision / ProviderSnapshot -> Vue 时间线与来源展示
+-> ReplanEvent 原子应用 -> 事件关联新修订 -> Revision Diff
 ```
 
 已实现：
 
-- `POST /api/field-task/plan` 完整业务接口与 `/api/health` 健康检查。
-- `FieldRiskAgent`、`TargetDiscoveryAgent`、`BaseLocationAgent`、`TaskPlanningAgent` 和总协调器。
-- 目标点位按名称与地址去重，按日期分配时不循环复用旧点位。
-- 高德点位、Tavily 环境检索、Kimi/OpenAI-Compatible 摘要的可选适配；显式超时、有限并发和逐工具降级。
-- 无密钥 Mock 模式，可复现上海 3 日外勤案例；页面明确标记合成数据与降级状态。
-- Vue 3 + TypeScript 任务表单与结果工作台，支持点位地图/坐标回退、任务顺序调整、删除、文本导出和浏览器打印 PDF。
-- 后端 5 条自动化测试通过，前端 TypeScript 检查与生产构建通过。
+- 自然语言双态输出：完整时生成严格草案，缺失时最多返回三组澄清问题；AgentRun 只保存输入指纹和结构化结果。
+- 1～7 天、1～6 个工作任务、任务时窗、优先级、交通偏好与报销上限的严格领域契约。
+- 有界 Beam Search 返回最多三个方案；Policy Engine 过滤硬约束，Verifier 独立复算任务覆盖、时间重叠、费用和合规。
+- 高德 v3 地理编码与 v5 市内路线适配，具备异步并发、超时、有限重试、调用预算、缓存和逐方式降级。
+- 计划请求、Agent 请求与业务事件分别幂等；active revision 使用乐观并发控制。
+- 任务改期/取消/新增/延长、预算和偏好事件可原子应用；天气与交通中断在尚未接入规划过滤前明确标记 `recorded_only`。
+- Vue 3 + TypeScript 工作台展示 Agent trace、候选比较、执行时间线、政策判定、来源快照和重规划差异。
+- SQLite 本地验证与 PostgreSQL Compose 交付配置；Alembic 迁移、健康/就绪检查和 GitHub Actions CI。
 
 ## 当前证据边界
 
@@ -41,14 +39,15 @@ Vue 3 表单
 | 并行点位/风险收集 | 已实现，Mock 路径已测试 | 可写“并行编排独立工具步骤” |
 | 高德 v5 市内路线适配 | 已进入 v1 规划链路并完成 MockTransport 契约/故障测试；真实密钥未复验 | 可写“实现适配与降级”，不写“实时服务已上线” |
 | Tavily/Kimi 适配 | 仅存在于 0.1 基线，v1 尚未重新接入 | 暂不写入 v1 项目成果 |
-| Vue 编辑、导出、地图回退 | 已实现并完成生产构建 | 可写入项目说明 |
+| Vue v1 任务、方案、来源与重规划工作台 | 已实现并完成生产构建 | 可写入项目说明 |
 | Mission、政策快照与计划修订持久化 | 已实现并测试 | 可写入简历 |
 | 有限搜索 Planner + Policy Engine + 独立 Verifier | 已实现，当前使用 Fixture 数据 | 可写“确定性规划内核”，必须说明数据模式 |
 | 计划请求幂等、revision 冲突与激活 | 已实现并测试 | 可写入简历 |
 | PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback 和 TestModel 测试；真实模型未复验 | 可写“实现类型化 Agent 入口”，不写“真实模型已上线” |
 | AgentRun 审计、幂等与固定集 | 已实现输入指纹、trace 查询和 5 场景 Mock 基线 | 可写工程机制；Mock 指标不能写成真实模型指标 |
+| ReplanEvent 事实应用与 Revision Diff | 已实现并测试；外部风险信号仅 recorded_only | 可写事件驱动重规划，不写“所有中断自动处置” |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 不写入简历 |
-| RAG、审批流、SSE、缓存、全局路线最优化 | 未实现 | 不写入简历 |
+| RAG、审批流、SSE、全局路线最优化 | 未实现 | 不写入简历 |
 | 独立公网部署 | 未完成 | 不提供或冒用原项目 URL |
 
 ## 本地运行
@@ -60,6 +59,7 @@ cd D:\CODEX\agent-portfolio\fieldpilot\backend
 uv venv .venv
 uv pip install --python .venv\Scripts\python.exe -r requirements.txt
 Copy-Item .env.example .env
+.\.venv\Scripts\alembic.exe upgrade head
 .\.venv\Scripts\python.exe run.py
 ```
 
@@ -78,20 +78,17 @@ npm run dev
 
 访问 <http://localhost:5173>。Vite 开发服务器会把 `/api` 代理到本地后端。
 
-## 上海示例
+### Docker Compose（配置已提供，本机尚未验证）
 
-示例输入位于 [`examples/shanghai-field-task.json`](examples/shanghai-field-task.json)：
+```powershell
+docker compose up --build
+```
 
-- 城市：上海
-- 周期：3 天
-- 行业：新能源汽车
-- 目标场所：品牌门店、核心商圈
-- 目标：调研品牌门店分布与周边竞品
-- 预算：3000 元
-- 交通：公共交通
-- 驻点偏好：靠近地铁，便于覆盖多个商圈
+浏览器访问 <http://localhost:8080>。Compose 使用 PostgreSQL，并在 API 启动前执行 Alembic 迁移。
 
-执行后会得到 3 天方案、6 个不重复合成点位、每日环境风险、驻点建议、成本拆分和 5 个工具/编排步骤状态。合成点位只用于验证工程闭环，不代表实时商业事实。
+## 杭州跨城示例
+
+结构化示例位于 [`examples/hangzhou-mission-v1.json`](examples/hangzhou-mission-v1.json)，前端内置同场景自然语言：上海出发、杭州两日三任务、高铁二等座、酒店/餐补/市内交通和总预算约束。执行后会得到三个可解释候选方案，并可修改任务时间触发 R2 与差异视图。Fixture 交通与住宿只用于验证工程闭环，不代表实时票价、库存或酒店推荐。
 
 ## 真实模式
 
@@ -131,9 +128,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前本机结果：后端 `5 passed`；前端 `vue-tsc --noEmit && vite build` 成功。结果需要在后续代码变化后重新运行。
-
-目标 v1 Stage 1～4B 当前验证结果为后端 `32 passed`，Alembic `upgrade/downgrade/check` 通过，前端生产构建继续通过。详细记录见 [开发日志](docs/development-log.md)。
+当前本机结果（2026-07-30）：后端 `38 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 `vue-tsc --noEmit && vite build` 成功。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
 
 ## 来源与二次开发说明
 
