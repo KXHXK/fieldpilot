@@ -1,0 +1,11 @@
+{
+  "city": "上海",
+  "start_date": "2026-08-01",
+  "end_date": "2026-08-03",
+  "industry": "新能源汽车",
+  "target_place_types": ["品牌门店", "核心商圈"],
+  "objective": "调研品牌门店分布与周边竞品",
+  "budget": 3000,
+  "transport_type": "public_transport",
+  "base_preference": "靠近地铁，便于覆盖多个商圈"
+}
