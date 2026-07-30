@@ -4,6 +4,10 @@ FieldPilot 面向商务拓展、市场调研、巡店与线下执行人员，把
 
 当前版本是可本地运行的 `0.1.0 MVP`。它采用混合式 Agent 工作流：确定性代码负责数据校验、点位去重、日期分配和成本计算，可选 LLM 仅对已经形成的结构化计划做受约束总结。系统不会让模型直接生成权威点位、计算成本或执行外部动作。
 
+> `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
+
+`feature/fieldpilot-v1-domain` 已完成目标版本的 Stage 1～3 及 Stage 4A 垂直切片：除领域、规划与高德路线治理外，新增单个 PydanticAI 自然语言解释 Agent，将自由文本转成严格 MissionDraft 或最多三项澄清问题。高德和 LLM 真实密钥尚未在本机实测；变更解析、Agent Trace 持久化和 v1 前端页面仍未完成。
+
 ## 已完成的业务闭环
 
 ```text
@@ -35,10 +39,15 @@ Vue 3 表单
 | FastAPI + Pydantic 数据契约 | 已实现并测试 | 可写入简历 |
 | 4 个专职 Agent + Coordinator | 已实现并测试 | 可写“受控多角色工作流”，不写“完全自治” |
 | 并行点位/风险收集 | 已实现，Mock 路径已测试 | 可写“并行编排独立工具步骤” |
-| 高德/Tavily/Kimi 适配 | 代码已接入，FieldPilot 尚未用真实密钥复验 | 暂不写成“真实服务已上线” |
+| 高德 v5 市内路线适配 | 已进入 v1 规划链路并完成 MockTransport 契约/故障测试；真实密钥未复验 | 可写“实现适配与降级”，不写“实时服务已上线” |
+| Tavily/Kimi 适配 | 仅存在于 0.1 基线，v1 尚未重新接入 | 暂不写入 v1 项目成果 |
 | Vue 编辑、导出、地图回退 | 已实现并完成生产构建 | 可写入项目说明 |
+| Mission、政策快照与计划修订持久化 | 已实现并测试 | 可写入简历 |
+| 有限搜索 Planner + Policy Engine + 独立 Verifier | 已实现，当前使用 Fixture 数据 | 可写“确定性规划内核”，必须说明数据模式 |
+| 计划请求幂等、revision 冲突与激活 | 已实现并测试 | 可写入简历 |
+| PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback 和 TestModel 测试；真实模型未复验 | 可写“实现类型化 Agent 入口”，不写“真实模型已上线” |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 不写入简历 |
-| 数据库、RAG、审批流、SSE、缓存、路线最优化 | 未实现 | 不写入简历 |
+| RAG、审批流、SSE、缓存、全局路线最优化 | 未实现 | 不写入简历 |
 | 独立公网部署 | 未完成 | 不提供或冒用原项目 URL |
 
 ## 本地运行
@@ -91,6 +100,11 @@ npm run dev
 USE_MOCK_TOOLS=false
 USE_MOCK_LLM=false
 AMAP_API_KEY=
+LOCAL_ROUTE_PROVIDER=amap
+PROVIDER_TIMEOUT_SECONDS=3.0
+PROVIDER_MAX_RETRIES=1
+PROVIDER_MAX_CONCURRENCY=4
+PROVIDER_MAX_LIVE_CALLS=32
 TAVILY_API_KEY=
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.moonshot.cn/v1
@@ -104,7 +118,7 @@ VITE_AMAP_JS_KEY=
 VITE_AMAP_JS_SECURITY_CODE=
 ```
 
-后端 `AMAP_API_KEY` 与浏览器 `VITE_AMAP_JS_KEY` 不是同一种 Key。真实模式在 FieldPilot 中重新完成复验前，不应声称线上可用。
+后端 `AMAP_API_KEY` 与浏览器 `VITE_AMAP_JS_KEY` 不是同一种 Key。`LOCAL_ROUTE_PROVIDER=fixture` 完全离线；设为 `amap` 后按路线查询真实接口，失败会保留原因并逐项降级。真实密钥完成复验前，不应声称线上可用。
 
 ## 验证
 
@@ -118,6 +132,8 @@ npm run build
 
 当前本机结果：后端 `5 passed`；前端 `vue-tsc --noEmit && vite build` 成功。结果需要在后续代码变化后重新运行。
 
+目标 v1 Stage 1～4A 当前验证结果为后端 `29 passed`，Alembic `upgrade/downgrade/check` 通过，前端生产构建继续通过。详细记录见 [开发日志](docs/development-log.md)。
+
 ## 来源与二次开发说明
 
 初始前后端分层与工具治理经验受 Datawhale HelloAgents 第十三章启发，并来自本人已完成、部署过的“智能旅行助手”项目。FieldPilot 在独立目录中重新实现了外勤领域模型、Agent 职责、请求/响应契约、点位任务语义、页面信息架构、Mock 数据、导出内容和项目文档；原 `1.0.0` 冻结目录和 `1.0.1` 工作区未被修改。
@@ -129,3 +145,5 @@ npm run build
 - [架构与技术取舍](docs/architecture.md)
 - [简历与面试事实口径](docs/resume-project-description.md)
 - [后续迭代边界](docs/roadmap.md)
+- [企业级目标设计（Target v1.0）](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)
+- [开发日志](docs/development-log.md)

@@ -1,24 +1,39 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.field_task import router as field_task_router
+from app.api.agent import router as agent_router
 from app.api.health import router as health_router
+from app.api.missions import router as missions_router
 from app.config import settings
+from app.db import create_database_schema
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings.database_auto_create:
+        await create_database_schema()
+    yield
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="城市外勤任务编排 Agent 的可运行 MVP。",
+    description="FieldPilot 外勤任务编排 API；保留 0.1 接口并新增 v1 任务领域。",
+    lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
 )
 app.include_router(health_router, prefix="/api")
+app.include_router(agent_router, prefix="/api")
 app.include_router(field_task_router, prefix="/api")
+app.include_router(missions_router, prefix="/api")
 
 
 @app.get("/")

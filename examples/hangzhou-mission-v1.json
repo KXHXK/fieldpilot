@@ -1,0 +1,74 @@
+{
+  "origin": {
+    "name": "上海虹桥站",
+    "address": "上海市闵行区申贵路1500号",
+    "city": "上海",
+    "longitude": 121.327,
+    "latitude": 31.2
+  },
+  "start_date": "2026-08-06",
+  "end_date": "2026-08-07",
+  "timezone": "Asia/Shanghai",
+  "urgency": "tight",
+  "visits": [
+    {
+      "name": "西湖区客户现场",
+      "location": {
+        "name": "西湖区客户现场",
+        "address": "杭州市西湖区文三路",
+        "city": "杭州"
+      },
+      "window_start": "2026-08-06T13:30:00+08:00",
+      "window_end": "2026-08-06T15:30:00+08:00",
+      "duration_minutes": 90,
+      "priority": "required",
+      "locked": false,
+      "notes": "完成现场联调"
+    },
+    {
+      "name": "滨江区复核任务",
+      "location": {
+        "name": "滨江区工作地点",
+        "address": "杭州市滨江区江南大道",
+        "city": "杭州"
+      },
+      "window_start": "2026-08-06T16:30:00+08:00",
+      "window_end": "2026-08-06T18:30:00+08:00",
+      "duration_minutes": 60,
+      "priority": "high",
+      "locked": false,
+      "notes": ""
+    },
+    {
+      "name": "萧山区交付确认",
+      "location": {
+        "name": "萧山区工作地点",
+        "address": "杭州市萧山区市心北路",
+        "city": "杭州"
+      },
+      "window_start": "2026-08-07T09:30:00+08:00",
+      "window_end": "2026-08-07T11:30:00+08:00",
+      "duration_minutes": 90,
+      "priority": "required",
+      "locked": false,
+      "notes": "完成交付确认后返回上海"
+    }
+  ],
+  "expense_policy": {
+    "policy_id": "demo-cn-v1",
+    "policy_version": "1",
+    "allowed_rail_classes": ["second_class"],
+    "allowed_flight_classes": ["economy"],
+    "hotel_nightly_cap_yuan": 450,
+    "meal_daily_cap_yuan": 120,
+    "local_transport_daily_cap_yuan": 200,
+    "trip_total_cap_yuan": 1600
+  },
+  "transport_preferences": {
+    "preferred_intercity_modes": ["rail", "flight"],
+    "preferred_local_modes": ["transit", "taxi", "walking"],
+    "minimum_transfer_minutes": 30,
+    "allow_early_arrival_day": false
+  },
+  "notes": "跨城外勤固定场景"
+}

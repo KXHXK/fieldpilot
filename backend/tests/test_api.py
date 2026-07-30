@@ -14,6 +14,21 @@ async def test_health() -> None:
 
 
 @pytest.mark.asyncio
+async def test_readiness_checks_database() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/ready")
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "database": "reachable",
+        "local_route_provider": "fixture",
+        "amap_key_configured": False,
+        "llm_key_configured": False,
+    }
+
+
+@pytest.mark.asyncio
 async def test_create_field_task_plan() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
