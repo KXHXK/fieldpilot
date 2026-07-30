@@ -6,7 +6,7 @@ FieldPilot 面向商务拓展、市场调研、巡店与线下执行人员，把
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
-`feature/fieldpilot-v1-domain` 已完成目标版本的 Stage 1～3 及 Stage 4A 垂直切片：除领域、规划与高德路线治理外，新增单个 PydanticAI 自然语言解释 Agent，将自由文本转成严格 MissionDraft 或最多三项澄清问题。高德和 LLM 真实密钥尚未在本机实测；变更解析、Agent Trace 持久化和 v1 前端页面仍未完成。
+`feature/fieldpilot-v1-domain` 已完成目标版本的 Stage 1～4B：除领域、规划与高德路线治理外，单个 PydanticAI Agent 可将自由文本转成严格 MissionDraft 或最多三项澄清问题；AgentRun 保存输入指纹、结构化输出和用量摘要，并提供请求幂等与 trace 查询。高德和 LLM 真实密钥尚未实测；变更解析和 v1 前端页面仍未完成。
 
 ## 已完成的业务闭环
 
@@ -46,6 +46,7 @@ Vue 3 表单
 | 有限搜索 Planner + Policy Engine + 独立 Verifier | 已实现，当前使用 Fixture 数据 | 可写“确定性规划内核”，必须说明数据模式 |
 | 计划请求幂等、revision 冲突与激活 | 已实现并测试 | 可写入简历 |
 | PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback 和 TestModel 测试；真实模型未复验 | 可写“实现类型化 Agent 入口”，不写“真实模型已上线” |
+| AgentRun 审计、幂等与固定集 | 已实现输入指纹、trace 查询和 5 场景 Mock 基线 | 可写工程机制；Mock 指标不能写成真实模型指标 |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 不写入简历 |
 | RAG、审批流、SSE、缓存、全局路线最优化 | 未实现 | 不写入简历 |
 | 独立公网部署 | 未完成 | 不提供或冒用原项目 URL |
@@ -132,7 +133,7 @@ npm run build
 
 当前本机结果：后端 `5 passed`；前端 `vue-tsc --noEmit && vite build` 成功。结果需要在后续代码变化后重新运行。
 
-目标 v1 Stage 1～4A 当前验证结果为后端 `29 passed`，Alembic `upgrade/downgrade/check` 通过，前端生产构建继续通过。详细记录见 [开发日志](docs/development-log.md)。
+目标 v1 Stage 1～4B 当前验证结果为后端 `32 passed`，Alembic `upgrade/downgrade/check` 通过，前端生产构建继续通过。详细记录见 [开发日志](docs/development-log.md)。
 
 ## 来源与二次开发说明
 
@@ -147,3 +148,4 @@ npm run build
 - [后续迭代边界](docs/roadmap.md)
 - [企业级目标设计（Target v1.0）](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)
 - [开发日志](docs/development-log.md)
+- [Mission Interpret v1 Mock 基线报告](docs/evals/mission-interpret-v1-baseline.md)

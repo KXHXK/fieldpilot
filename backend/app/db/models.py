@@ -189,3 +189,23 @@ class ProviderSnapshotRecord(Base):
     )
 
     mission: Mapped[MissionRecord] = relationship(back_populates="provider_snapshots")
+
+
+class AgentRunRecord(Base):
+    __tablename__ = "agent_runs"
+
+    trace_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(120), unique=True)
+    capability: Mapped[str] = mapped_column(String(60))
+    input_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    reference_date: Mapped[date] = mapped_column(Date)
+    timezone: Mapped[str] = mapped_column(String(64))
+    mode: Mapped[str] = mapped_column(String(20))
+    model: Mapped[str] = mapped_column(String(120))
+    prompt_version: Mapped[str] = mapped_column(String(60))
+    status: Mapped[str] = mapped_column(String(30))
+    output_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    usage_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    latency_ms: Mapped[float] = mapped_column(Float)
+    failure_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

@@ -228,3 +228,14 @@
 ### 下一步
 
 Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本化固定数据集和字段提取评测脚本；获得 LLM Key 后再做真实模型 A/B，不用 Mock 指标替代模型指标。
+
+## 2026-07-30｜Target v1.0 Stage 4B：Agent 审计与固定评测
+
+- 新增 `agent_runs` 表和 Alembic `20260730_0002`，保存 request/trace、输入 SHA-256 指纹、Prompt/模型/模式、结构化输出、Token/请求数、延迟和失败类别；不保存自由文本原文。
+- 相同 `request_id + 输入` 返回同一 trace 并标记幂等重放；相同 request_id 对应不同输入返回 `409 agent_request_conflict`。
+- 新增 `GET /api/v1/agent/runs/{trace_id}`。
+- 新增版本化固定集 `mission-interpret-v1`、评测脚本和基线报告，覆盖完整任务、三类缺失与 Prompt Injection。
+- 当前 deterministic Mock 的 5 个固定场景四项精确指标均为 1.00；该结果只作为规则回归，不作为真实 LLM 指标。
+- 后端全量测试：`32 passed`；迁移 head 为 `20260730_0002`。
+
+下一步进入 Stage 5：先让受支持的 ReplanEvent 安全应用到 Mission facts，再生成带 `input_event_id` 的计划修订和结构化 revision diff。

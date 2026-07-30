@@ -6,6 +6,8 @@ from pydantic_ai.models.test import TestModel
 from app.agent import FieldPilotMissionInterpreter
 from app.config import Settings
 from app.domain import AgentMissionOutput, InterpretMissionRequest, MissionDraft
+from app.db import SessionFactory
+from app.db.models import AgentRunRecord
 from app.main import app
 
 models.ALLOW_MODEL_REQUESTS = False
@@ -93,3 +95,37 @@ async def test_live_mode_missing_key_falls_back_honestly() -> None:
     assert run.mode == "fallback"
     assert run.failure_type == "missing_api_key"
     assert run.request_count == 0
+
+
+@pytest.mark.asyncio
+async def test_agent_request_is_persisted_idempotent_and_queryable() -> None:
+    request = {"request_id": "agent-audit-001", "text": COMPLETE_TEXT,
+               "reference_date": "2026-07-30", "timezone": "Asia/Shanghai"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/api/v1/agent/interpret-mission", json=request)
+        second = await client.post("/api/v1/agent/interpret-mission", json=request)
+        loaded = await client.get(f"/api/v1/agent/runs/{first.json()['trace']['trace_id']}")
+    assert first.status_code == second.status_code == loaded.status_code == 200
+    assert second.json()["trace"]["trace_id"] == first.json()["trace"]["trace_id"]
+    assert second.json()["trace"]["idempotent_replay"] is True
+    assert loaded.json()["trace"]["idempotent_replay"] is False
+    async with SessionFactory() as session:
+        record = await session.get(AgentRunRecord, first.json()["trace"]["trace_id"])
+        assert record is not None
+        assert len(record.input_fingerprint) == 64
+        assert not hasattr(record, "input_text")
+        assert record.usage_payload["tool_calls"] == 0
+
+
+@pytest.mark.asyncio
+async def test_agent_request_id_reuse_with_different_text_conflicts() -> None:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/api/v1/agent/interpret-mission", json={
+            "request_id": "agent-conflict-001", "text": COMPLETE_TEXT,
+            "reference_date": "2026-07-30"})
+        conflict = await client.post("/api/v1/agent/interpret-mission", json={
+            "request_id": "agent-conflict-001", "text": "这是另一个完全不同的杭州外勤任务描述。",
+            "reference_date": "2026-07-30"})
+    assert first.status_code == 200
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "agent_request_conflict"
