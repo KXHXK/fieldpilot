@@ -22,7 +22,6 @@ on:
 
 permissions:
   contents: read
-  models: read
 
 jobs:
   evaluate:
@@ -37,14 +36,22 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements.txt
+      - name: Check provider configuration
+        env:
+          FIELD_PILOT_LLM_API_KEY: ${{ secrets.FIELD_PILOT_LLM_API_KEY }}
+        run: |
+          if [ -z "$FIELD_PILOT_LLM_API_KEY" ]; then
+            echo "Configure repository secret FIELD_PILOT_LLM_API_KEY before running live eval."
+            exit 2
+          fi
       - name: Run real-model evaluation
         id: live_eval
         continue-on-error: true
         working-directory: backend
         env:
-          OPENAI_API_KEY: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_BASE_URL: https://models.github.ai/inference
-          MODEL_NAME: openai/gpt-4.1-mini
+          OPENAI_API_KEY: ${{ secrets.FIELD_PILOT_LLM_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.FIELD_PILOT_LLM_BASE_URL || 'https://api.moonshot.cn/v1' }}
+          MODEL_NAME: ${{ vars.FIELD_PILOT_LLM_MODEL || 'kimi-k2.6' }}
           USE_MOCK_LLM: "false"
           LLM_TIMEOUT_SECONDS: "60"
           LLM_TOTAL_TOKENS_LIMIT: "6000"

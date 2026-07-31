@@ -6,7 +6,7 @@
 - 数据集版本：`mission-interpret-live-v1`
 - 场景数：15
 - 默认重复次数：3
-- 模型：GitHub Models `openai/gpt-4.1-mini`
+- 模型：由仓库变量 `FIELD_PILOT_LLM_MODEL` 固定，默认 `kimi-k2.6`
 - Prompt：`mission-interpret-v1`
 - 运行入口：GitHub Actions `fieldpilot-live-agent-eval`
 
@@ -16,8 +16,8 @@
 
 - 只有返回 `AgentMode.LIVE` 的调用进入真实模型质量指标；fallback 不参与得分。
 - 任一调用降级时工作流失败，不能用 Mock 结果替代 live 报告。
-- 工作流使用仓库临时 `GITHUB_TOKEN` 的 `models: read` 权限，不持久化个人模型密钥。
-- 免费层每分钟请求数有限，脚本默认在 live 调用之间等待 4.2 秒。
+- 工作流只从仓库 secret `FIELD_PILOT_LLM_API_KEY` 读取密钥，并通过 `FIELD_PILOT_LLM_BASE_URL` / `FIELD_PILOT_LLM_MODEL` 固定兼容端点和模型；密钥不写入仓库或 artifact。
+- 免费/试用层通常有请求频率限制，脚本默认在 live 调用之间等待 4.2 秒。
 - 报告只保存结构化判定、模式、模型、延迟、Token 和失败类别，不保存用户原文或模型自由文本。
 
 ## 运行
@@ -26,4 +26,4 @@
 
 ## 当前状态
 
-本机没有具备 `models` scope 的令牌，真实调用尚未执行。工作流和数据集已完成，但在出现成功 Actions run 与可下载报告前，本项目仍只声称“真实评测链路已配置”，不声称真实模型质量已经通过。
+真实调用尚未成功。2026-07-31 的 GitHub Actions run `30641667031` 对 15 个场景全部返回 410，根因为 GitHub Models 已于 2026-07-30 退役；诊断 run `30642038742` 固定记录了 `github_models_retirement_brownout`，该供应商已从工作流移除。Netlify AI Gateway 本地最小探测返回 403 `mismatched_client_ip`，且生产调用会消耗当前已耗尽的 Netlify credits，因此没有继续调用。工作流和数据集已完成，但在配置独立 OpenAI-compatible secret、出现成功 run 与可下载报告前，本项目仍只声称“真实评测链路已配置”，不声称真实模型质量已经通过。
