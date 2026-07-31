@@ -299,3 +299,12 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过，最终 head 为 `20260731_0004`；前端 `vue-tsc --noEmit && vite build` 通过，版本升级为 `0.4.0-dev`。
 - 运行中 HTTP 冒烟通过：R1/R2 均为 710 元，保护 5 个前缀段，`protected_prefix_unchanged=true`，执行版本推进到 2，来源模式保持 `fixture + manual`。
 - 真实浏览器完成 interpret → R1 → lock V1 → 第二任务改期 → R2 → complete V2。页面显示 6 处变化、11 段保持，已完成任务禁用，浏览器控制台无 warning/error。
+
+## 2026-07-31｜Stage 10：独立公网专题与发布验证
+
+- 新增独立的 Vite `showcase` 构建模式：公网只呈现经验证的业务问题、Agent/确定性系统边界、R1/R2 检查点后缀重规划、技术取舍、测试证据和诚实限制；本地默认构建仍保留完整 Vue 工作台。
+- 专题页在真实本地浏览器完成桌面和 375px 移动端验收，修复架构区全宽布局导致的横向溢出；R1/R2 交互切换正常，控制台无 warning/error。
+- 创建独立 Netlify 项目 `fieldpilot-kxh`，预览 deploy `6a6c82f34f699af981dae355` 构建成功。直接生产部署因账户 credits 限制返回 403，随后使用 Netlify 官方 `restoreSiteDeploy` 接口将同一已验证 deploy 晋升为生产版本，没有重新构建或替换产物。
+- 生产地址为 <https://fieldpilot-kxh.netlify.app/>。根路径与 `/mission/demo` SPA 回退均返回 HTTPS 200；指纹化 JS/CSS 资源、MIME、immutable cache 和 CSP、COOP、`nosniff`、Referrer-Policy、Permissions-Policy 响应头通过检查。
+- 应用内远程浏览器访问 Netlify 时连续超时并重置会话，因此没有把它记录为公网浏览器验收；当前公网证据是生产 HTTP/CDN 验证，视觉和交互证据来自相同构建产物的本地真实浏览器。
+- 静态专题不连接可写后端。FastAPI/PostgreSQL 公网部署、真实高德 Key、真实模型 Key 和 Docker 运行状态仍保持未验证。
