@@ -47,7 +47,7 @@ cd D:\CODEX\agent-portfolio\fieldpilot\backend
 点击“确认草案并生成方案”。依次讲：
 
 - 最多三个可解释候选，而不是模型自由写一段行程；
-- 时间线包含跨城、转点、任务、住宿、缓冲和返程；
+- 时间线包含跨城、转点、任务、住宿、工作点/酒店附近餐次、缓冲和返程；
 - Policy Engine 判断席别、住宿、市内交通、餐补和总预算；
 - Verifier 独立复算任务覆盖、时间重叠、分类成本和政策不变量；
 - 每个 segment 保留 provider 与 `source_mode`，Fixture 不冒充实时数据。

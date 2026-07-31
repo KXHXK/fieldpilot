@@ -8,7 +8,7 @@
 
 ## P1：补齐核心业务
 
-- 增加餐饮候选和逐日餐补核算，避免当前“餐饮为 0”的显式警告长期存在。
+- [已完成] 增加高德周边餐饮 POI/Fixture 候选、时间线餐次和逐日餐补核算；缺价或失败时保留来源与降级证据。
 - 为铁路/航班/酒店实现授权 Provider 或人工候选导入，不抓取 12306 内部接口。
 - 让 transport disruption/weather risk 真正过滤候选；在此之前保持 `recorded_only`。
 - 引入 segment lock 与执行进度，严格保留 completed/locked 前缀，只重新求解受影响后缀。

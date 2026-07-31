@@ -304,6 +304,12 @@ function reset() {
       <section class="two-column">
         <article class="content-card">
           <div class="section-heading compact"><span>04 / POLICY</span><h3>报销规则判定</h3></div>
+          <dl v-if="selectedOption" class="v1-cost-ledger">
+            <div><dt>跨城交通</dt><dd>¥{{ selectedOption.costs.intercity_transport_yuan }}</dd></div>
+            <div><dt>市内交通</dt><dd>¥{{ selectedOption.costs.local_transport_yuan }}</dd></div>
+            <div><dt>住宿</dt><dd>¥{{ selectedOption.costs.lodging_yuan }}</dd></div>
+            <div><dt>餐饮</dt><dd>¥{{ selectedOption.costs.meals_yuan }}</dd></div>
+          </dl>
           <ul class="policy-list"><li v-for="rule in selectedOption?.policy_decisions" :key="rule.rule_id"><span :class="`policy-${rule.status}`">{{ rule.status }}</span><div><strong>{{ rule.explanation }}</strong><small>{{ rule.observed }} / {{ rule.limit }}</small></div></li></ul>
         </article>
         <article class="content-card">
@@ -330,6 +336,6 @@ function reset() {
       </section>
     </section>
 
-    <footer class="page-footer"><span>FieldPilot · Agent + deterministic planner + verifier</span><span>fixture 数据会明确标记，不代表实时票价或库存</span></footer>
+    <footer class="page-footer"><span>FieldPilot · Agent + deterministic planner + verifier</span><span>fixture 数据会明确标记，不代表实时票价、库存或餐饮报价</span></footer>
   </main>
 </template>

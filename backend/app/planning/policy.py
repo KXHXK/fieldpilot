@@ -17,7 +17,7 @@ from app.domain import (
 
 
 class PolicyEngine:
-    version = "policy-v1"
+    version = "policy-v2"
 
     @staticmethod
     def allows_transport(
@@ -113,7 +113,7 @@ class PolicyEngine:
                 "meal_daily_cap",
                 max_meal,
                 policy.meal_daily_cap_yuan,
-                "单日餐饮预留",
+                "单日餐饮预估",
             )
         )
         decisions.append(

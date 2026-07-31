@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from app.domain import CandidateBundle, LocationInput, MissionRead, SourceMode, TransportCandidate
+from app.domain import (
+    CandidateBundle,
+    LocationInput,
+    MealCandidate,
+    MealType,
+    MissionRead,
+    SourceMode,
+    TransportCandidate,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +41,14 @@ class CandidateProvider(Protocol):
         preferred_modes: list[str],
         timezone_name: str = "Asia/Shanghai",
     ) -> list[TransportCandidate]: ...
+
+    async def nearby_meals(
+        self,
+        anchor_ref: str,
+        anchor_location: LocationInput,
+        meal_type: MealType,
+        max_cost_yuan: int,
+    ) -> list[MealCandidate]: ...
 
     def provider_snapshots(self) -> list[ProviderSnapshotData]: ...
 

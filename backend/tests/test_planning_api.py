@@ -8,7 +8,7 @@ import pytest
 from app.db import SessionFactory
 from app.db.models import ProviderSnapshotRecord
 from app.config import settings
-from app.domain import MissionRead, PlanRevisionRead, SegmentType
+from app.domain import MealType, MissionRead, PlanRevisionRead, SegmentType
 from app.main import app
 from app.planning import PlanVerificationError, PlanVerifier, PolicyEngine
 from app.providers.fixture import FixtureCandidateProvider
@@ -65,6 +65,17 @@ async def test_generate_plan_persists_verified_fixture_options() -> None:
             for decision in option["policy_decisions"]
         )
         assert option["costs"]["planned_total_yuan"] <= 1600
+        meal_segments = [
+            segment
+            for segment in option["segments"]
+            if segment["segment_type"] == "meal_allowance"
+        ]
+        assert meal_segments
+        assert option["costs"]["meals_yuan"] == sum(
+            segment["cost_yuan"] for segment in meal_segments
+        )
+        assert all(segment["candidate_id"] for segment in meal_segments)
+        assert all(segment["metadata"]["anchor_ref"] for segment in meal_segments)
         assert any("Fixture" in warning for warning in option["warnings"])
     assert listed.status_code == 200
     assert len(listed.json()) == 1
@@ -76,6 +87,14 @@ async def test_generate_plan_persists_verified_fixture_options() -> None:
         assert snapshot is not None
         assert snapshot.source_mode == "fixture"
         assert snapshot.provider == "fieldpilot-fixture-v1"
+        snapshots = [
+            await session.get(ProviderSnapshotRecord, item)
+            for item in revision["bundle"]["provider_snapshot_ids"]
+        ]
+        assert {item.capability for item in snapshots if item is not None} == {
+            "planning_candidates",
+            "meal_candidates",
+        }
 
 
 @pytest.mark.asyncio
@@ -262,6 +281,32 @@ async def test_independent_verifier_rejects_tampered_visit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_independent_verifier_rejects_tampered_meal_anchor() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission_payload = await create_mission(client)
+        response = await client.post(
+            f"/api/v1/missions/{mission_payload['mission_id']}/plans",
+            json={"request_id": "plan-meal-verifier-001", "based_on_revision": None},
+        )
+
+    assert response.status_code == 201, response.text
+    mission = MissionRead.model_validate(mission_payload)
+    revision = PlanRevisionRead.model_validate(response.json())
+    option = revision.bundle.options[0]
+    meal_segment = next(
+        segment
+        for segment in option.segments
+        if segment.segment_type == SegmentType.MEAL_ALLOWANCE
+    )
+    meal_segment.metadata["anchor_ref"] = "tampered-anchor"
+
+    with pytest.raises(PlanVerificationError) as captured:
+        PlanVerifier(PolicyEngine()).verify(mission, option)
+    assert any("锚点" in violation for violation in captured.value.violations)
+
+
+@pytest.mark.asyncio
 async def test_amap_mode_without_key_persists_honest_fallback_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -277,13 +322,14 @@ async def test_amap_mode_without_key_persists_honest_fallback_snapshot(
 
     assert response.status_code == 201, response.text
     revision = response.json()
-    assert len(revision["bundle"]["provider_snapshot_ids"]) == 2
+    assert len(revision["bundle"]["provider_snapshot_ids"]) == 3
     assert any(
         "高德失败后降级" in warning
         for option in revision["bundle"]["options"]
         for warning in option["warnings"]
     )
     route_snapshot_id = revision["bundle"]["provider_snapshot_ids"][1]
+    meal_snapshot_id = revision["bundle"]["provider_snapshot_ids"][2]
     async with SessionFactory() as session:
         snapshot = await session.get(ProviderSnapshotRecord, route_snapshot_id)
         assert snapshot is not None
@@ -294,6 +340,18 @@ async def test_amap_mode_without_key_persists_honest_fallback_snapshot(
         assert all(
             set(trace["failure_types"].values()) == {"missing_api_key"}
             for trace in snapshot.payload["queries"]
+        )
+        meal_snapshot = await session.get(
+            ProviderSnapshotRecord,
+            meal_snapshot_id,
+        )
+        assert meal_snapshot is not None
+        assert meal_snapshot.provider == "amap-webservice-v5"
+        assert meal_snapshot.capability == "meal_candidates"
+        assert meal_snapshot.source_mode == "fixture"
+        assert all(
+            trace["failure_type"] == "missing_api_key"
+            for trace in meal_snapshot.payload["queries"]
         )
 
 
@@ -343,3 +401,22 @@ async def test_fixture_routes_are_stable_across_equivalent_mission_ids() -> None
         int((route.arrive_at - route.depart_at).total_seconds())
         for route in second_routes
     ]
+    first_meals = await provider.nearby_meals(
+        first.visits[0].task_id,
+        first.visits[0].location,
+        MealType.LUNCH,
+        first.expense_policy.meal_daily_cap_yuan,
+    )
+    second_meals = await provider.nearby_meals(
+        second.visits[0].task_id,
+        second.visits[0].location,
+        MealType.LUNCH,
+        second.expense_policy.meal_daily_cap_yuan,
+    )
+    assert [item.candidate_id for item in first_meals] == [
+        item.candidate_id for item in second_meals
+    ]
+    assert [item.estimated_cost_yuan for item in first_meals] == [
+        item.estimated_cost_yuan for item in second_meals
+    ]
+    assert first_meals[0].anchor_ref != second_meals[0].anchor_ref

@@ -186,11 +186,16 @@ button.full { width: 100%; margin-top: 10px; }
 .timeline i::after { content: ""; position: absolute; top: 10px; left: 2px; width: 1px; height: 78px; background: #cdd8d1; }
 .timeline article:last-child i::after { display: none; }
 .timeline .segment-visit { background: var(--orange); border-color: #f6d8cd; }
+.timeline .segment-meal_allowance { background: #d89b2b; border-color: #f6e5bf; }
 .timeline article > div { padding-bottom: 22px; }
 .timeline article strong { display: block; font-size: 14px; }
 .timeline article p { margin: 6px 0; color: var(--muted); font-size: 11px; }
 .timeline article > div > small { margin-left: 8px; color: var(--muted); font-size: 10px; }
 .policy-list { display: grid; gap: 13px; padding: 0; list-style: none; }
+.v1-cost-ledger { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 0 0 18px; }
+.v1-cost-ledger div { display: flex; justify-content: space-between; padding: 9px 11px; background: #eef2ed; border-radius: 8px; }
+.v1-cost-ledger dt { color: var(--muted); font-size: 11px; }
+.v1-cost-ledger dd { margin: 0; color: var(--green-dark); font-size: 12px; font-weight: 700; }
 .policy-list li { display: grid; grid-template-columns: 55px 1fr; gap: 10px; }
 .policy-list li > span { height: fit-content; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 700; text-align: center; text-transform: uppercase; }
 .policy-pass { color: #1d6549; background: #ddefe3; }

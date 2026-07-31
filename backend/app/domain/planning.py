@@ -27,6 +27,12 @@ class TransportMode(StrEnum):
     BICYCLING = "bicycling"
 
 
+class MealType(StrEnum):
+    BREAKFAST = "breakfast"
+    LUNCH = "lunch"
+    DINNER = "dinner"
+
+
 class SegmentType(StrEnum):
     INTERCITY_TRANSPORT = "intercity_transport"
     LOCAL_TRANSPORT = "local_transport"
@@ -82,6 +88,21 @@ class StayCandidate(StrictModel):
     address: str
     city: str
     nightly_price_yuan: int = Field(gt=0)
+    rating: float | None = Field(default=None, ge=0, le=5)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MealCandidate(StrictModel):
+    candidate_id: str
+    provider: str
+    source_mode: SourceMode
+    meal_type: MealType
+    anchor_ref: str
+    name: str
+    address: str
+    estimated_cost_yuan: int = Field(gt=0)
+    service_minutes: int = Field(default=30, ge=15, le=120)
+    distance_meters: int | None = Field(default=None, ge=0, le=50_000)
     rating: float | None = Field(default=None, ge=0, le=5)
     metadata: dict[str, Any] = Field(default_factory=dict)
 

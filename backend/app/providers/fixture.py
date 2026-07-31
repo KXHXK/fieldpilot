@@ -7,6 +7,9 @@ from zoneinfo import ZoneInfo
 
 from app.domain import (
     CandidateBundle,
+    LocationInput,
+    MealCandidate,
+    MealType,
     MissionRead,
     SourceMode,
     StayCandidate,
@@ -20,6 +23,10 @@ class FixtureCandidateProvider:
     """Versioned, credential-free candidates for deterministic planner tests."""
 
     provider_name = "fieldpilot-fixture-v1"
+
+    def __init__(self) -> None:
+        self._meal_cache: dict[str, list[MealCandidate]] = {}
+        self._meal_traces: list[dict] = []
 
     def search(self, mission: MissionRead) -> CandidateBundle:
         zone = ZoneInfo(mission.timezone)
@@ -161,9 +168,15 @@ class FixtureCandidateProvider:
             "arrival-hub": hub_location,
             "departure-hub": hub_location,
             **{visit.task_id: visit.location for visit in mission.visits},
-            "hotel:fx-hotel-transit": last_visit_location,
-            "hotel:fx-hotel-near-work": first_visit_location,
-            "hotel:fx-hotel-over-cap": first_visit_location,
+            "hotel:fx-hotel-transit": last_visit_location.model_copy(
+                update={"name": stays[0].name}
+            ),
+            "hotel:fx-hotel-near-work": first_visit_location.model_copy(
+                update={"name": stays[1].name}
+            ),
+            "hotel:fx-hotel-over-cap": first_visit_location.model_copy(
+                update={"name": stays[2].name}
+            ),
         }
         fingerprint_source = {
             "provider": self.provider_name,
@@ -260,8 +273,103 @@ class FixtureCandidateProvider:
                 )
         return candidates[:3]
 
+    async def nearby_meals(
+        self,
+        anchor_ref: str,
+        anchor_location: LocationInput,
+        meal_type: MealType,
+        max_cost_yuan: int,
+    ) -> list[MealCandidate]:
+        fingerprint_source = {
+            "provider": self.provider_name,
+            "anchor": anchor_location.model_dump(mode="json"),
+            "meal_type": meal_type.value,
+            "max_cost_yuan": max_cost_yuan,
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                fingerprint_source,
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        cache_key = f"{fingerprint}:{anchor_ref}"
+        cached = self._meal_cache.get(cache_key)
+        if cached is not None:
+            return [item.model_copy(deep=True) for item in cached]
+
+        labels = {
+            MealType.BREAKFAST: ("早餐", 24),
+            MealType.LUNCH: ("午餐", 38),
+            MealType.DINNER: ("晚餐", 48),
+        }
+        label, base_cost = labels[meal_type]
+        candidates = [
+            MealCandidate(
+                candidate_id=(
+                    "fx-meal-"
+                    + hashlib.sha1(
+                        f"{fingerprint}:{index}".encode("utf-8")
+                    ).hexdigest()[:12]
+                ),
+                provider=self.provider_name,
+                source_mode=SourceMode.FIXTURE,
+                meal_type=meal_type,
+                anchor_ref=anchor_ref,
+                name=f"{anchor_location.name}附近{label}候选 {index + 1}",
+                address=f"{anchor_location.address}周边（合成）",
+                estimated_cost_yuan=base_cost + index * 8,
+                service_minutes=30 if meal_type != MealType.DINNER else 40,
+                distance_meters=220 + index * 180,
+                rating=4.3 - index * 0.2,
+                metadata={
+                    "fixture_version": "meal-fixture-v1",
+                    "price_semantics": "人均预算估值",
+                },
+            )
+            for index in range(2)
+            if base_cost + index * 8 <= max_cost_yuan
+        ]
+        self._meal_cache[cache_key] = candidates
+        self._meal_traces.append(
+            {
+                "query_fingerprint": fingerprint,
+                "anchor_ref": anchor_ref,
+                "meal_type": meal_type.value,
+                "max_cost_yuan": max_cost_yuan,
+                "source_mode": SourceMode.FIXTURE.value,
+                "candidates": [
+                    item.model_dump(mode="json") for item in candidates
+                ],
+            }
+        )
+        return [item.model_copy(deep=True) for item in candidates]
+
     def provider_snapshots(self) -> list[ProviderSnapshotData]:
-        return []
+        if not self._meal_traces:
+            return []
+        fetched_at = datetime.now(timezone.utc)
+        return [
+            ProviderSnapshotData(
+                provider=self.provider_name,
+                capability="meal_candidates",
+                source_mode=SourceMode.FIXTURE,
+                query_fingerprint=hashlib.sha256(
+                    json.dumps(
+                        [trace["query_fingerprint"] for trace in self._meal_traces],
+                        sort_keys=True,
+                    ).encode("utf-8")
+                ).hexdigest(),
+                payload={
+                    "provider": self.provider_name,
+                    "fixture_version": "meal-fixture-v1",
+                    "queries": self._meal_traces,
+                    "raw_provider_payload_persisted": False,
+                },
+                fetched_at=fetched_at,
+                expires_at=fetched_at + timedelta(days=30),
+            )
+        ]
 
     async def aclose(self) -> None:
         return None

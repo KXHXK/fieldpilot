@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from app.domain import (
+    MealType,
     MissionRead,
     PlanOption,
     PolicyStatus,
@@ -16,7 +20,7 @@ class PlanVerificationError(RuntimeError):
 
 
 class PlanVerifier:
-    version = "plan-verifier-v1"
+    version = "plan-verifier-v2"
 
     def __init__(self, policy_engine: PolicyEngine) -> None:
         self.policy_engine = policy_engine
@@ -26,7 +30,19 @@ class PlanVerifier:
         segments = option.segments
         if not segments:
             violations.append("计划没有任何执行段")
-        for previous, current in zip(segments, segments[1:]):
+        exclusive_segments = sorted(
+            (
+                segment
+                for segment in segments
+                if segment.segment_type
+                not in {SegmentType.BUFFER, SegmentType.LODGING}
+            ),
+            key=lambda segment: (segment.start_at, segment.end_at),
+        )
+        for previous, current in zip(
+            exclusive_segments,
+            exclusive_segments[1:],
+        ):
             if current.start_at < previous.end_at:
                 violations.append(
                     f"计划段重叠：{previous.segment_id} 与 {current.segment_id}"
@@ -54,6 +70,38 @@ class PlanVerifier:
             )
             if actual_minutes != visit.duration_minutes:
                 violations.append(f"任务 {visit.task_id} 持续时间不一致")
+
+        zone = ZoneInfo(mission.timezone)
+        observed_meal_slots: set[tuple[str, str]] = set()
+        valid_meal_types = {item.value for item in MealType}
+        for segment in segments:
+            if segment.segment_type != SegmentType.MEAL_ALLOWANCE:
+                continue
+            meal_type = str(segment.metadata.get("meal_type") or "")
+            day = segment.start_at.astimezone(zone).date().isoformat()
+            slot = (day, meal_type)
+            if meal_type not in valid_meal_types:
+                violations.append(f"餐饮段 {segment.segment_id} 缺少有效餐次")
+            elif slot in observed_meal_slots:
+                violations.append(f"{day} 的 {meal_type} 被重复安排")
+            observed_meal_slots.add(slot)
+            if not segment.candidate_id or segment.cost_yuan <= 0:
+                violations.append(f"餐饮段 {segment.segment_id} 缺少候选或费用")
+            anchor_ref = segment.metadata.get("anchor_ref")
+            if not anchor_ref or segment.from_ref != anchor_ref or segment.to_ref != anchor_ref:
+                violations.append(f"餐饮段 {segment.segment_id} 的就近锚点不一致")
+            try:
+                window_start = datetime.fromisoformat(
+                    str(segment.metadata["meal_window_start"])
+                )
+                window_end = datetime.fromisoformat(
+                    str(segment.metadata["meal_window_end"])
+                )
+            except (KeyError, TypeError, ValueError):
+                violations.append(f"餐饮段 {segment.segment_id} 缺少有效时间窗")
+            else:
+                if segment.start_at < window_start or segment.end_at > window_end:
+                    violations.append(f"餐饮段 {segment.segment_id} 超出餐次时间窗")
 
         calculated_intercity = sum(
             segment.cost_yuan

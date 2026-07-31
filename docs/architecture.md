@@ -12,7 +12,7 @@ flowchart LR
     API --> AG["PydanticAI Interpreter"]
     AG --> MS["Mission Application Service"]
     MS --> CP["Candidate Provider"]
-    CP --> AM["Amap geo / route"]
+    CP --> AM["Amap geo / route / meal POI"]
     CP --> FX["Rail / flight / hotel fixtures"]
     MS --> PE["Policy Engine"]
     MS --> PL["Bounded Beam Planner"]
@@ -32,7 +32,7 @@ Agent 只把自然语言转为 `MissionDraft` 或澄清问题，工具数固定�
 
 ## 4. 规划与验证
 
-Planner 对任务顺序、跨城候选和住宿候选进行有界搜索，根据紧密程度调整迟到风险、成本、换乘、步行和政策余量权重，最多返回三个选项。它是可解释的启发式搜索，不声称全局最优。
+Planner 对任务顺序、跨城候选和住宿候选进行有界搜索，根据紧密程度调整迟到风险、成本、换乘、步行和政策余量权重，最多返回三个选项。行程骨架形成后，它只在任务缓冲或住宿覆盖的空闲区间中安排早/午/晚餐，优先选择当前锚点附近、带人均消费且不超过当日剩余额度的候选；找不到时保留可解释告警，不牺牲任务时间窗。它是可解释的启发式搜索，不声称全局最优。
 
 Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出结构化判定。Verifier 不复用 Planner 的“结论”，独立检查：
 
@@ -43,9 +43,9 @@ Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出
 
 ## 5. Provider 与真实/模拟边界
 
-`CandidateProvider` 隔离规划器与数据源。高德适配实现地理编码和驾车/出租车、步行、骑行、公交路线，具备异步调用、有限并发、超时、一次重试、调用预算、缓存与 in-flight 合并。单个方式失败时只降级该方式，并在 segment、warning 和 ProviderSnapshot 中记录 `live / mixed / fixture` 与失败类别。
+`CandidateProvider` 隔离规划器与数据源。高德适配实现地理编码、驾车/出租车、步行、骑行、公交路线，以及 v5 `/place/around` 周边餐饮 POI；路线和餐饮查询都具备异步调用、有限并发、超时、一次重试、调用预算、缓存与 in-flight 合并。餐饮只接受包含人均消费且落在剩余餐补内的 POI，缺价、高价或查询失败时不会伪造实时价格，而是记录原因并降级为冻结 Fixture。每个 segment、warning 和 ProviderSnapshot 都保留 `live / mixed / fixture` 与失败类别。
 
-铁路、航班、酒店当前为版本固定 Fixture，不抓取 12306 内部接口，也不冒充实时库存或价格。高德和 LLM 的代码契约已测试，但本机无真实 Key，尚未做公网验收。
+铁路、航班、酒店当前为版本固定 Fixture，不抓取 12306 内部接口，也不冒充实时库存或价格。餐饮同时具备高德真实适配路径和 Fixture 降级，但本机无真实 Key；高德路线/餐饮和 LLM 均只完成代码契约测试，尚未做公网验收。
 
 ## 6. 状态、幂等和重规划
 
@@ -61,8 +61,8 @@ Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出
 
 ## 7. 数据与可观测性
 
-SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、ProviderSnapshot、ReplanEvent 和 AgentRun。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。外部快照不保存 API Key 或带 Key 的完整 URL。
+SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、ProviderSnapshot、ReplanEvent 和 AgentRun。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。路线与餐饮快照保存查询指纹、归一化候选、来源和安全的 HTTP 事件摘要，不保存 API Key、带 Key 的完整 URL 或原始 Provider 响应。
 
 ## 8. 交付边界
 
-本地已验证 SQLite、39 项 Pytest、三版 Alembic 往返、运行中 HTTP 冒烟、真实浏览器主链路与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。
+本地已验证 SQLite、42 项 Pytest、三版 Alembic 往返、运行中 HTTP 冒烟、真实浏览器主链路与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。

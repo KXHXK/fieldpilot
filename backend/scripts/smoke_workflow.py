@@ -146,6 +146,12 @@ def run(base_url: str) -> dict:
         "event_application": event["application_status"],
         "r1_cost_yuan": first_option["costs"]["planned_total_yuan"],
         "r2_cost_yuan": second_option["costs"]["planned_total_yuan"],
+        "r1_meal_cost_yuan": first_option["costs"]["meals_yuan"],
+        "r2_meal_segments": sum(
+            segment["segment_type"] == "meal_allowance"
+            for segment in second_option["segments"]
+        ),
+        "provider_snapshot_count": len(second["bundle"]["provider_snapshot_ids"]),
         "changed_segments": len(comparison["changes"]),
         "preserved_segments": comparison["preserved_segment_count"],
         "source_modes": sorted(

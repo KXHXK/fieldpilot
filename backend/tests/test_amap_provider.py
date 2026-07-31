@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
-from app.domain import LocationInput, SourceMode, TransportMode
+from app.domain import LocationInput, MealType, SourceMode, TransportMode
 from app.providers import AmapLocalRouteProvider
 
 
@@ -20,6 +20,135 @@ def geocode_payload(coordinates: str) -> dict:
         "infocode": "10000",
         "geocodes": [{"location": coordinates, "citycode": "0571"}],
     }
+
+
+@pytest.mark.asyncio
+async def test_amap_v5_meal_contract_filters_budget_and_deduplicates_queries() -> None:
+    observed_paths: list[str] = []
+    around_query: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed_paths.append(request.url.path)
+        if request.url.path == "/v3/geocode/geo":
+            return httpx.Response(200, json=geocode_payload("120.130000,30.280000"))
+        if request.url.path == "/v5/place/around":
+            around_query.update(request.url.params)
+            return httpx.Response(
+                200,
+                json={
+                    "status": "1",
+                    "info": "OK",
+                    "infocode": "10000",
+                    "pois": [
+                        {
+                            "id": "poi-affordable",
+                            "name": "文三路工作餐",
+                            "address": "文三路 88 号",
+                            "distance": "320",
+                            "business": {
+                                "cost": "42",
+                                "rating": "4.6",
+                                "tag": "简餐",
+                                "opentime_today": "10:30-21:00",
+                            },
+                        },
+                        {
+                            "id": "poi-over-budget",
+                            "name": "高价餐厅",
+                            "address": "文三路 99 号",
+                            "distance": "180",
+                            "business": {"cost": "168", "rating": "4.8"},
+                        },
+                        {
+                            "id": "poi-no-price",
+                            "name": "价格未知餐厅",
+                            "address": "文三路 66 号",
+                            "distance": "200",
+                            "business": {"rating": "4.2"},
+                        },
+                    ],
+                },
+            )
+        raise AssertionError(f"unexpected path: {request.url.path}")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://restapi.amap.com"
+    ) as client:
+        provider = AmapLocalRouteProvider(api_key="test-key", client=client)
+        args = (
+            "visit-a",
+            location("客户 A", "杭州市西湖区文三路"),
+            MealType.LUNCH,
+            60,
+        )
+        first = await provider.nearby_meals(*args)
+        second = await provider.nearby_meals(*args)
+
+    assert observed_paths == ["/v3/geocode/geo", "/v5/place/around"]
+    assert around_query["types"] == "050000"
+    assert around_query["show_fields"] == "business"
+    assert around_query["sortrule"] == "distance"
+    assert len(first) == 1
+    assert first[0].name == "文三路工作餐"
+    assert first[0].estimated_cost_yuan == 42
+    assert first[0].rating == 4.6
+    assert first[0].distance_meters == 320
+    assert first[0].source_mode == SourceMode.LIVE
+    assert [item.candidate_id for item in second] == [
+        item.candidate_id for item in first
+    ]
+    snapshot = provider.provider_snapshots()[0]
+    assert snapshot.capability == "meal_candidates"
+    assert snapshot.source_mode == SourceMode.LIVE
+    assert snapshot.payload["raw_provider_payload_persisted"] is False
+
+
+@pytest.mark.asyncio
+async def test_amap_meal_without_price_qualified_result_falls_back_honestly() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v3/geocode/geo":
+            return httpx.Response(200, json=geocode_payload("120.130000,30.280000"))
+        if request.url.path == "/v5/place/around":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "1",
+                    "info": "OK",
+                    "infocode": "10000",
+                    "pois": [
+                        {
+                            "id": "poi-unknown-price",
+                            "name": "价格未知餐厅",
+                            "address": "文三路 66 号",
+                            "business": {"rating": "4.2"},
+                        }
+                    ],
+                },
+            )
+        raise AssertionError(f"unexpected path: {request.url.path}")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://restapi.amap.com"
+    ) as client:
+        provider = AmapLocalRouteProvider(api_key="test-key", client=client)
+        candidates = await provider.nearby_meals(
+            "visit-a",
+            location("客户 A", "杭州市西湖区文三路"),
+            MealType.LUNCH,
+            60,
+        )
+
+    assert candidates
+    assert all(item.source_mode == SourceMode.FIXTURE for item in candidates)
+    assert all(
+        item.metadata["fallback_reason"] == "empty_price_qualified_meal_result"
+        for item in candidates
+    )
+    snapshot = provider.provider_snapshots()[0]
+    assert snapshot.source_mode == SourceMode.FIXTURE
+    assert snapshot.payload["queries"][0]["failure_type"] == (
+        "empty_price_qualified_meal_result"
+    )
 
 
 @pytest.mark.asyncio

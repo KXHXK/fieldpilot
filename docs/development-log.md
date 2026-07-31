@@ -254,7 +254,7 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - Vue 页面升级为“自然语言输入 -> Agent 草案/澄清 -> Mission -> 三方案比较 -> 来源/政策 -> 事件重规划 -> Revision Diff”的完整工作台。
 - 页面展示 Agent trace、模型/Prompt/耗时、segment provider/source mode、ProviderSnapshot ID 和 Fixture 警告。
 - 新增 PostgreSQL Compose、Nginx 反向代理、API migration-on-start 与 GitHub Actions 后端/迁移/前端验证流程。
-- 本阶段验证：`38 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 TypeScript 与 Vite 生产构建通过；`git diff --check` 通过。
+- 本阶段验证：`38 passed`；Alembic `upgrade head / check / downgrade 20260730_0002 / upgrade head` 通过；前端 TypeScript 与 Vite 生产构建通过；`git diff --check` 通过。
 - 本机没有 Docker CLI，因此 Compose 和镜像只完成配置审查，不能写成已实际运行；真实高德和模型 Key 仍未测试。
 
 ## 2026-07-31｜Stage 7：真实浏览器验收与演示交付
@@ -266,3 +266,22 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 新增五分钟演示手册与发布验收清单，明确已验证、仅配置和需要外部凭证的三类状态。
 - 运行中冒烟发现相同业务输入重建后 Fixture 费用会因随机 mission/task ID 改变；将查询指纹、路线种子和候选 ID 改为基于地点/日期等业务字段，并新增跨 Mission ID 稳定性测试。连续两次完整冒烟的 R1/R2 费用均为 571 元。
 - Stage 7 完成后后端全量测试为 `39 passed`。
+
+## 2026-07-31｜Stage 8：周边餐饮候选与逐日餐补闭环
+
+- 新增 `MealCandidate / MealType` 领域契约和 `CandidateProvider.nearby_meals` 端口，餐饮不是写死的每日常量，而是带锚点、餐次、人均费用、距离、评分、来源和候选 ID 的规划输入。
+- Fixture 以地点语义生成稳定候选与查询指纹；缓存键额外包含当前任务/酒店锚点，避免等价地点复用时串用其他 Mission 的引用。
+- 高德适配按官方搜索 POI 2.0 契约调用 `GET /v5/place/around`，使用餐饮类型 `050000`、距离排序和 `show_fields=business`；只接收包含人均消费且不超过剩余餐补的 POI，缺价、超价、无结果或调用失败时记录原因并降级。
+- Planner 在现有任务缓冲或住宿时间中安排早/午/晚餐，不移动任务和交通骨架；紧密行程优先距离和用时，灵活行程优先费用，无法安排的餐次返回日期级告警。
+- Policy Engine 按任务时区聚合每日餐饮费用；Verifier 独立复查餐次唯一性、候选、就近锚点、餐次时间窗、分类费用和政策结论。住宿和缓冲是可叠加背景区间，交通、任务和餐次仍禁止互相重叠。
+- ProviderSnapshot 分开保存 `planning_candidates`、`local_routes` 和 `meal_candidates` 的查询指纹、归一化候选、来源与安全 HTTP 事件摘要，不保存 Key、完整 URL 或原始响应。
+- Vue 工作台新增四类费用明细和餐饮时间线节点；Fixture 页脚和告警明确不代表实时餐饮报价。
+
+### 验证结果
+
+- 后端全量：`42 passed`；新增高德餐饮预算过滤/查询去重、无价格结果诚实降级、餐饮快照、跨 Mission ID 稳定性和 Verifier 餐饮锚点篡改覆盖。
+- 前端：`vue-tsc --noEmit && vite build` 通过，版本升级为 `0.3.0-dev`。
+- 连续两次运行中 HTTP 冒烟均通过：R1/R2 均为 710 元，R1 餐饮 148 元，R2 包含 4 个餐次、2 份 ProviderSnapshot；事件应用、修订差异与来源模式保持稳定。
+- 真实浏览器重新完成 health → interpret → R1 → event → R2 → diff，页面展示 4 个餐次和跨城/市内/住宿/餐饮四类费用，重规划为 8 处变化、9 段保持，控制台无 warning/error。
+- 浏览器前置检查发现 Vite 将 `/api` 代理到 `localhost:8000` 时在当前 Windows 环境命中错误监听端；改为 `127.0.0.1:8000` 后开发代理健康检查恢复，避免 IPv4/IPv6 解析差异造成假故障。
+- 本机仍无真实高德 Key；POI 证据来自官方响应契约的 MockTransport 和无 Key Fixture 链路，不能表述为实时餐厅推荐已上线。

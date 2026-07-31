@@ -16,6 +16,8 @@ import httpx
 from app.domain import (
     CandidateBundle,
     LocationInput,
+    MealCandidate,
+    MealType,
     MissionRead,
     SourceMode,
     TransportCandidate,
@@ -84,7 +86,10 @@ class AmapLocalRouteProvider:
         self._route_inflight: dict[str, asyncio.Task[list[TransportCandidate]]] = {}
         self._point_cache: dict[str, _ResolvedPoint] = {}
         self._point_inflight: dict[str, asyncio.Task[_ResolvedPoint]] = {}
+        self._meal_cache: dict[str, list[MealCandidate]] = {}
+        self._meal_inflight: dict[str, asyncio.Task[list[MealCandidate]]] = {}
         self._route_traces: list[dict[str, Any]] = []
+        self._meal_traces: list[dict[str, Any]] = []
         self._http_events: list[dict[str, Any]] = []
 
     def search(self, mission: MissionRead) -> CandidateBundle:
@@ -237,6 +242,189 @@ class AmapLocalRouteProvider:
             }
         )
         return combined[:4]
+
+    async def nearby_meals(
+        self,
+        anchor_ref: str,
+        anchor_location: LocationInput,
+        meal_type: MealType,
+        max_cost_yuan: int,
+    ) -> list[MealCandidate]:
+        fingerprint = self._fingerprint(
+            {
+                "anchor": anchor_location.model_dump(mode="json"),
+                "meal_type": meal_type.value,
+                "max_cost_yuan": max_cost_yuan,
+            }
+        )
+        cache_key = f"{fingerprint}:{anchor_ref}"
+        async with self._cache_lock:
+            cached = self._meal_cache.get(cache_key)
+            if cached is not None:
+                return [item.model_copy(deep=True) for item in cached]
+            task = self._meal_inflight.get(cache_key)
+            if task is None:
+                task = asyncio.create_task(
+                    self._load_meals(
+                        fingerprint,
+                        anchor_ref,
+                        anchor_location,
+                        meal_type,
+                        max_cost_yuan,
+                    )
+                )
+                self._meal_inflight[cache_key] = task
+        try:
+            candidates = await asyncio.shield(task)
+        finally:
+            async with self._cache_lock:
+                self._meal_inflight.pop(cache_key, None)
+        async with self._cache_lock:
+            self._meal_cache[cache_key] = candidates
+        return [item.model_copy(deep=True) for item in candidates]
+
+    async def _load_meals(
+        self,
+        fingerprint: str,
+        anchor_ref: str,
+        anchor_location: LocationInput,
+        meal_type: MealType,
+        max_cost_yuan: int,
+    ) -> list[MealCandidate]:
+        started = perf_counter()
+        failure_type: str | None = None
+        live_candidates: list[MealCandidate] = []
+        if not self.api_key:
+            failure_type = "missing_api_key"
+        else:
+            try:
+                point = await self._resolve_point(anchor_ref, anchor_location)
+                payload = await self._request_json(
+                    "place_around_meal",
+                    "/v5/place/around",
+                    {
+                        "location": point.coordinates,
+                        "radius": 1200,
+                        "types": "050000",
+                        "keywords": (
+                            "早餐" if meal_type == MealType.BREAKFAST else "餐厅"
+                        ),
+                        "sortrule": "distance",
+                        "show_fields": "business",
+                        "page_size": 10,
+                        "page_num": 1,
+                    },
+                )
+                live_candidates = self._parse_meals(
+                    fingerprint,
+                    anchor_ref,
+                    meal_type,
+                    max_cost_yuan,
+                    payload,
+                )
+                if not live_candidates:
+                    failure_type = "empty_price_qualified_meal_result"
+            except ProviderFailure as exc:
+                failure_type = exc.failure_type
+
+        candidates = live_candidates
+        if failure_type is not None:
+            fallback = await self.fallback.nearby_meals(
+                anchor_ref,
+                anchor_location,
+                meal_type,
+                max_cost_yuan,
+            )
+            candidates = [
+                item.model_copy(
+                    update={
+                        "metadata": {
+                            **item.metadata,
+                            "fallback_from": self.provider_name,
+                            "fallback_reason": failure_type,
+                            "query_fingerprint": fingerprint,
+                        }
+                    }
+                )
+                for item in fallback
+            ]
+        source_modes = {item.source_mode for item in candidates}
+        source_mode = (
+            SourceMode.MIXED
+            if len(source_modes) > 1
+            else next(iter(source_modes), SourceMode.UNAVAILABLE)
+        )
+        self._meal_traces.append(
+            {
+                "query_fingerprint": fingerprint,
+                "anchor_ref": anchor_ref,
+                "meal_type": meal_type.value,
+                "max_cost_yuan": max_cost_yuan,
+                "source_mode": source_mode.value,
+                "failure_type": failure_type,
+                "elapsed_ms": round((perf_counter() - started) * 1000, 2),
+                "candidates": [item.model_dump(mode="json") for item in candidates],
+            }
+        )
+        return candidates[:5]
+
+    def _parse_meals(
+        self,
+        fingerprint: str,
+        anchor_ref: str,
+        meal_type: MealType,
+        max_cost_yuan: int,
+        payload: dict[str, Any],
+    ) -> list[MealCandidate]:
+        raw_items = payload.get("pois")
+        if not isinstance(raw_items, list):
+            raise ProviderFailure("invalid_meal_response")
+        candidates: list[MealCandidate] = []
+        for index, raw in enumerate(raw_items):
+            if not isinstance(raw, dict):
+                continue
+            business = raw.get("business") if isinstance(raw.get("business"), dict) else {}
+            cost = self._positive_number(business.get("cost"))
+            if cost is None or cost > max_cost_yuan:
+                continue
+            name = self._optional_text(raw.get("name"))
+            address = self._optional_text(raw.get("address"))
+            if name is None or address is None:
+                continue
+            rating = self._nonnegative_number(business.get("rating"))
+            distance = self._nonnegative_number(raw.get("distance"))
+            poi_id = self._optional_text(raw.get("id"))
+            base_identity = poi_id or f"{fingerprint}:{index}"
+            identity = f"{base_identity}:{meal_type.value}"
+            candidates.append(
+                MealCandidate(
+                    candidate_id=(
+                        "amap-meal-"
+                        + hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12]
+                    ),
+                    provider=self.provider_name,
+                    source_mode=SourceMode.LIVE,
+                    meal_type=meal_type,
+                    anchor_ref=anchor_ref,
+                    name=name,
+                    address=address,
+                    estimated_cost_yuan=int(round(cost)),
+                    service_minutes=30 if meal_type != MealType.DINNER else 40,
+                    distance_meters=int(distance) if distance is not None else None,
+                    rating=rating if rating is not None and rating <= 5 else None,
+                    metadata={
+                        "api_version": "v5",
+                        "query_fingerprint": fingerprint,
+                        "amap_poi_id": poi_id,
+                        "tag": self._optional_text(business.get("tag")),
+                        "opentime_today": self._optional_text(
+                            business.get("opentime_today")
+                        ),
+                        "price_semantics": "高德 POI 人均消费",
+                    },
+                )
+            )
+        return candidates
 
     async def _resolve_point(
         self,
@@ -488,37 +676,69 @@ class AmapLocalRouteProvider:
             self._live_calls += 1
 
     def provider_snapshots(self) -> list[ProviderSnapshotData]:
-        if not self._route_traces:
-            return []
-        modes = {trace["source_mode"] for trace in self._route_traces}
-        source_mode = (
-            SourceMode.MIXED
-            if len(modes) > 1 or SourceMode.MIXED.value in modes
-            else SourceMode(next(iter(modes)))
-        )
+        snapshots: list[ProviderSnapshotData] = []
         fetched_at = datetime.now(timezone.utc)
-        payload = {
-            "provider": self.provider_name,
-            "api_version": "v5",
-            "live_call_count": self._live_calls,
-            "max_live_calls": self.max_live_calls,
-            "queries": self._route_traces,
-            "http_events": self._http_events,
-            "raw_provider_payload_persisted": False,
-        }
-        return [
-            ProviderSnapshotData(
-                provider=self.provider_name,
-                capability="local_routes",
-                source_mode=source_mode,
-                query_fingerprint=self._fingerprint(
-                    [trace["query_fingerprint"] for trace in self._route_traces]
-                ),
-                payload=payload,
-                fetched_at=fetched_at,
-                expires_at=fetched_at + timedelta(minutes=10),
+        if self._route_traces:
+            modes = {trace["source_mode"] for trace in self._route_traces}
+            source_mode = (
+                SourceMode.MIXED
+                if len(modes) > 1 or SourceMode.MIXED.value in modes
+                else SourceMode(next(iter(modes)))
             )
-        ]
+            snapshots.append(
+                ProviderSnapshotData(
+                    provider=self.provider_name,
+                    capability="local_routes",
+                    source_mode=source_mode,
+                    query_fingerprint=self._fingerprint(
+                        [trace["query_fingerprint"] for trace in self._route_traces]
+                    ),
+                    payload={
+                        "provider": self.provider_name,
+                        "api_version": "v5",
+                        "live_call_count": self._live_calls,
+                        "max_live_calls": self.max_live_calls,
+                        "queries": self._route_traces,
+                        "http_events": self._http_events,
+                        "raw_provider_payload_persisted": False,
+                    },
+                    fetched_at=fetched_at,
+                    expires_at=fetched_at + timedelta(minutes=10),
+                )
+            )
+        if self._meal_traces:
+            modes = {trace["source_mode"] for trace in self._meal_traces}
+            source_mode = (
+                SourceMode.MIXED
+                if len(modes) > 1 or SourceMode.MIXED.value in modes
+                else SourceMode(next(iter(modes)))
+            )
+            snapshots.append(
+                ProviderSnapshotData(
+                    provider=self.provider_name,
+                    capability="meal_candidates",
+                    source_mode=source_mode,
+                    query_fingerprint=self._fingerprint(
+                        [trace["query_fingerprint"] for trace in self._meal_traces]
+                    ),
+                    payload={
+                        "provider": self.provider_name,
+                        "api_version": "v5",
+                        "live_call_count": self._live_calls,
+                        "max_live_calls": self.max_live_calls,
+                        "queries": self._meal_traces,
+                        "http_events": [
+                            event
+                            for event in self._http_events
+                            if event["capability"] in {"geocode", "place_around_meal"}
+                        ],
+                        "raw_provider_payload_persisted": False,
+                    },
+                    fetched_at=fetched_at,
+                    expires_at=fetched_at + timedelta(minutes=10),
+                )
+            )
+        return snapshots
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -541,7 +761,7 @@ class AmapLocalRouteProvider:
             number = float(value)
         except (TypeError, ValueError):
             return None
-        return number if number > 0 else None
+        return number if math.isfinite(number) and number > 0 else None
 
     @staticmethod
     def _nonnegative_number(value: Any) -> float | None:
@@ -549,7 +769,7 @@ class AmapLocalRouteProvider:
             number = float(value)
         except (TypeError, ValueError):
             return None
-        return number if number >= 0 else None
+        return number if math.isfinite(number) and number >= 0 else None
 
 
 __all__ = ["AmapLocalRouteProvider", "ProviderFailure"]

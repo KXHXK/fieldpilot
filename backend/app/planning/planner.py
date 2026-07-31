@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 from app.domain import (
     CandidateBundle,
     CostLedger,
+    MealCandidate,
+    MealType,
     MissionRead,
     PlanOption,
     PlanSegment,
@@ -41,10 +43,16 @@ class _SearchState:
     min_slack_minutes: int
     walking_minutes: int
     transfer_count: int
+    meal_warnings: tuple[str, ...] = ()
 
 
 class BoundedMissionPlanner:
-    version = "bounded-beam-v1"
+    version = "bounded-beam-v2"
+    _meal_windows = {
+        MealType.BREAKFAST: (time(7, 0), time(9, 0), "早餐"),
+        MealType.LUNCH: (time(11, 30), time(14, 0), "午餐"),
+        MealType.DINNER: (time(17, 30), time(20, 30), "晚餐"),
+    }
 
     def __init__(
         self,
@@ -133,7 +141,14 @@ class BoundedMissionPlanner:
                 for return_candidate in returns
             ]
         )
-        for finalized in finalized_states:
+        meal_states = await asyncio.gather(
+            *[
+                self._append_meals(mission, bundle, finalized)
+                for finalized in finalized_states
+                if finalized is not None
+            ]
+        )
+        for finalized in meal_states:
             if finalized is None:
                 continue
             option = self._to_option(mission, finalized, bundle)
@@ -147,6 +162,7 @@ class BoundedMissionPlanner:
                     SegmentType.INTERCITY_TRANSPORT,
                     SegmentType.VISIT,
                     SegmentType.LODGING,
+                    SegmentType.MEAL_ALLOWANCE,
                 }
             )
             if signature in signatures:
@@ -390,6 +406,140 @@ class BoundedMissionPlanner:
             )
         return prepared
 
+    async def _append_meals(
+        self,
+        mission: MissionRead,
+        bundle: CandidateBundle,
+        state: _SearchState,
+    ) -> _SearchState:
+        segments = list(state.segments)
+        if not segments:
+            return state
+        zone = ZoneInfo(mission.timezone)
+        trip_start = min(segment.start_at for segment in segments)
+        trip_end = max(segment.end_at for segment in segments)
+        daily_spend: dict[str, int] = {}
+        warnings: list[str] = []
+        current_day = mission.start_date
+        while current_day <= mission.end_date:
+            day_key = current_day.isoformat()
+            for meal_type, (local_start, local_end, label) in self._meal_windows.items():
+                slot_start = datetime.combine(
+                    current_day,
+                    local_start,
+                    tzinfo=zone,
+                ).astimezone(trip_start.tzinfo)
+                slot_end = datetime.combine(
+                    current_day,
+                    local_end,
+                    tzinfo=zone,
+                ).astimezone(trip_start.tzinfo)
+                active_start = max(slot_start, trip_start)
+                active_end = min(slot_end, trip_end)
+                if active_end <= active_start:
+                    continue
+                remaining_cap = (
+                    mission.expense_policy.meal_daily_cap_yuan
+                    - daily_spend.get(day_key, 0)
+                )
+                if remaining_cap <= 0:
+                    warnings.append(f"{day_key} {label}未安排：当日餐补额度已用尽。")
+                    continue
+                hosts = sorted(
+                    (
+                        segment
+                        for segment in segments
+                        if segment.segment_type
+                        in {SegmentType.BUFFER, SegmentType.LODGING}
+                        and min(segment.end_at, active_end)
+                        > max(segment.start_at, active_start)
+                    ),
+                    key=lambda segment: (
+                        segment.segment_type != SegmentType.BUFFER,
+                        segment.start_at,
+                    ),
+                )
+                scheduled = False
+                for host in hosts:
+                    anchor_ref = host.to_ref or host.from_ref
+                    if anchor_ref is None:
+                        continue
+                    anchor_location = bundle.reference_locations.get(anchor_ref)
+                    if anchor_location is None:
+                        continue
+                    candidates = await self.provider.nearby_meals(
+                        anchor_ref,
+                        anchor_location,
+                        meal_type,
+                        remaining_cap,
+                    )
+                    feasible: list[tuple[MealCandidate, datetime, datetime]] = []
+                    for candidate in candidates:
+                        meal_start = max(active_start, host.start_at)
+                        meal_end = meal_start + timedelta(
+                            minutes=candidate.service_minutes
+                        )
+                        if meal_end <= min(active_end, host.end_at):
+                            feasible.append((candidate, meal_start, meal_end))
+                    if not feasible:
+                        continue
+                    candidate, meal_start, meal_end = min(
+                        feasible,
+                        key=lambda item: self._meal_candidate_key(
+                            mission.urgency,
+                            item[0],
+                        ),
+                    )
+                    segments.append(
+                        self._segment(
+                            SegmentType.MEAL_ALLOWANCE,
+                            f"{label}：{candidate.name}",
+                            meal_start,
+                            meal_end,
+                            provider=candidate.provider,
+                            source_mode=candidate.source_mode,
+                            from_ref=anchor_ref,
+                            to_ref=anchor_ref,
+                            cost_yuan=candidate.estimated_cost_yuan,
+                            candidate_id=candidate.candidate_id,
+                            metadata={
+                                **candidate.metadata,
+                                "meal_type": candidate.meal_type.value,
+                                "anchor_ref": anchor_ref,
+                                "address": candidate.address,
+                                "distance_meters": candidate.distance_meters,
+                                "rating": candidate.rating,
+                                "service_minutes": candidate.service_minutes,
+                                "meal_window_start": slot_start.isoformat(),
+                                "meal_window_end": slot_end.isoformat(),
+                                "host_segment_id": host.segment_id,
+                            },
+                        )
+                    )
+                    daily_spend[day_key] = (
+                        daily_spend.get(day_key, 0)
+                        + candidate.estimated_cost_yuan
+                    )
+                    scheduled = True
+                    break
+                if not scheduled:
+                    warnings.append(
+                        f"{day_key} {label}未找到预算内且不影响任务的就近时间窗。"
+                    )
+            current_day += timedelta(days=1)
+        segments.sort(
+            key=lambda segment: (
+                segment.start_at,
+                segment.end_at,
+                segment.segment_type.value,
+            )
+        )
+        return replace(
+            state,
+            segments=tuple(segments),
+            meal_warnings=tuple(warnings),
+        )
+
     async def _best_local_route(
         self,
         mission: MissionRead,
@@ -444,7 +594,11 @@ class BoundedMissionPlanner:
             for item in segments
             if item.segment_type == SegmentType.LODGING
         )
-        meals = 0
+        meals = sum(
+            item.cost_yuan
+            for item in segments
+            if item.segment_type == SegmentType.MEAL_ALLOWANCE
+        )
         total = intercity + local + lodging + meals
         costs = CostLedger(
             intercity_transport_yuan=intercity,
@@ -478,9 +632,10 @@ class BoundedMissionPlanner:
             score=score,
             warnings=[
                 *bundle.assumptions,
-                "尚未生成餐饮候选，餐饮费用暂记 0 元，不代表无需报销。",
+                *state.meal_warnings,
                 "尚未包含出发地到跨城交通枢纽的首段接驳。",
                 *self._route_source_warnings(segments),
+                *self._meal_source_warnings(segments),
             ],
         )
 
@@ -559,6 +714,23 @@ class BoundedMissionPlanner:
         )
 
     @staticmethod
+    def _meal_candidate_key(
+        urgency: Urgency,
+        candidate: MealCandidate,
+    ) -> tuple[float, ...]:
+        distance = float(candidate.distance_meters or 50_000)
+        rating_penalty = 5.0 - float(candidate.rating or 0)
+        if urgency == Urgency.TIGHT:
+            return (distance, candidate.service_minutes, candidate.estimated_cost_yuan)
+        if urgency == Urgency.FLEXIBLE:
+            return (candidate.estimated_cost_yuan, distance, rating_penalty)
+        return (
+            candidate.estimated_cost_yuan + distance / 100,
+            rating_penalty,
+            distance,
+        )
+
+    @staticmethod
     def _route_source_warnings(segments: list[PlanSegment]) -> list[str]:
         local_segments = [
             segment
@@ -581,6 +753,31 @@ class BoundedMissionPlanner:
             segment.source_mode == SourceMode.FIXTURE for segment in local_segments
         ):
             return ["市内路线为冻结 Fixture，不代表实时路况或价格。"]
+        return []
+
+    @staticmethod
+    def _meal_source_warnings(segments: list[PlanSegment]) -> list[str]:
+        meal_segments = [
+            segment
+            for segment in segments
+            if segment.segment_type == SegmentType.MEAL_ALLOWANCE
+        ]
+        fallback_reasons = sorted(
+            {
+                str(segment.metadata["fallback_reason"])
+                for segment in meal_segments
+                if segment.metadata.get("fallback_reason")
+            }
+        )
+        if fallback_reasons:
+            return [
+                "部分餐饮候选由高德 POI 查询失败后降级为 Fixture："
+                + "、".join(fallback_reasons)
+            ]
+        if meal_segments and all(
+            segment.source_mode == SourceMode.FIXTURE for segment in meal_segments
+        ):
+            return ["餐饮候选为冻结 Fixture，人均费用仅用于报销规则回归。"]
         return []
 
     def _segment(
