@@ -42,6 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=("mock", "live"), default="mock")
     parser.add_argument("--dataset", type=Path)
     parser.add_argument("--runs", type=int, default=None)
+    parser.add_argument("--limit", type=int, default=None, help="Evaluate only the first N cases.")
     parser.add_argument(
         "--delay-seconds",
         type=float,
@@ -57,6 +58,11 @@ async def evaluate(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
         "mission_interpret_live_v1.json" if args.mode == "live" else "mission_interpret_v1.json"
     )
     dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    cases = dataset["cases"]
+    if args.limit is not None:
+        if args.limit < 1 or args.limit > len(cases):
+            raise ValueError(f"--limit must be between 1 and {len(cases)}")
+        cases = cases[: args.limit]
     runs = args.runs or (3 if args.mode == "live" else 1)
     if runs < 1 or runs > 10:
         raise ValueError("--runs must be between 1 and 10")
@@ -83,7 +89,7 @@ async def evaluate(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
     field_correct = field_total = 0
 
     for run_index in range(1, runs + 1):
-        for case_index, case in enumerate(dataset["cases"], start=1):
+        for case_index, case in enumerate(cases, start=1):
             if invocation_reports and delay_seconds:
                 await asyncio.sleep(delay_seconds)
             result = await interpreter.interpret(
@@ -136,6 +142,8 @@ async def evaluate(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
                     "input_tokens": result.input_tokens,
                     "output_tokens": result.output_tokens,
                     "failure_type": result.failure_type,
+                    "failure_status_code": result.failure_status_code,
+                    "failure_detail": result.failure_detail,
                 }
             )
 
@@ -146,7 +154,7 @@ async def evaluate(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
         "prompt_version": PROMPT_VERSION,
         "requested_mode": args.mode,
         "configured_model": settings.model_name if args.mode == "live" else "deterministic-mock-v1",
-        "case_count": len(dataset["cases"]),
+        "case_count": len(cases),
         "runs_per_case": runs,
         "delay_seconds": delay_seconds,
         "invocation_count": invocation_count,

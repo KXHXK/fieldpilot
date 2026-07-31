@@ -36,6 +36,8 @@ class InterpreterRun:
     input_tokens: int | None = None
     output_tokens: int | None = None
     failure_type: str | None = None
+    failure_status_code: int | None = None
+    failure_detail: str | None = None
 
 
 class FieldPilotMissionInterpreter:
@@ -61,7 +63,14 @@ class FieldPilotMissionInterpreter:
                 request_count=usage.requests, input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
             )
         except Exception as exc:
-            return self._mock(command, AgentMode.FALLBACK, type(exc).__name__, started)
+            return self._mock(
+                command,
+                AgentMode.FALLBACK,
+                type(exc).__name__,
+                started,
+                failure_status_code=getattr(exc, "status_code", None),
+                failure_detail=_safe_failure_detail(exc),
+            )
 
     def _agent(self) -> Agent[None, AgentMissionOutput]:
         model = self.model_override
@@ -73,11 +82,14 @@ class FieldPilotMissionInterpreter:
                      retries=1, tools=(), name="fieldpilot_mission_interpreter")
 
     def _mock(self, command: InterpretMissionRequest, mode: AgentMode,
-              failure: str | None = None, started: float | None = None) -> InterpreterRun:
+              failure: str | None = None, started: float | None = None,
+              failure_status_code: int | None = None,
+              failure_detail: str | None = None) -> InterpreterRun:
         begun = started or perf_counter()
         return InterpreterRun(finalize_output(_parse_fixture(command), command.text), mode,
                               "deterministic-mock-v1", round((perf_counter() - begun) * 1000, 2),
-                              failure_type=failure)
+                              failure_type=failure, failure_status_code=failure_status_code,
+                              failure_detail=failure_detail)
 
 
 def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
@@ -149,6 +161,18 @@ def _parse_fixture(command: InterpretMissionRequest) -> AgentMissionOutput:
 def _city(value: str) -> str | None:
     match = re.search(r"([\u4e00-\u9fa5]{2,8}?市)", value)
     return match.group(1).removesuffix("市") if match else None
+
+
+def _safe_failure_detail(exc: Exception) -> str:
+    """Keep a bounded provider error summary without request text or credentials."""
+    body = getattr(exc, "body", None)
+    raw = json.dumps(body, ensure_ascii=False, default=str) if body is not None else str(exc)
+    redacted = re.sub(
+        r"(?i)(bearer\s+|api[_-]?key[=:]\s*|token[=:]\s*)[A-Za-z0-9._-]+",
+        r"\1[redacted]",
+        raw,
+    )
+    return redacted[:500]
 
 
 __all__ = [
