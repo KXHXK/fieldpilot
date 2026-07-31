@@ -24,8 +24,11 @@
 ## 已配置但未验证
 
 - [ ] Docker 镜像构建与 PostgreSQL Compose：本机没有 Docker CLI。
-- [ ] GitHub Actions：工作流文件已创建，当前提交推送后确认。
 - [ ] Netlify 静态前端和独立后端部署：尚未配置生产 URL。
+
+## 远端验证
+
+- [x] GitHub Actions `verify`：后端测试、Alembic schema check 与前端构建通过。
 
 ## 需要外部凭证
 
