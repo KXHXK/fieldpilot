@@ -99,6 +99,23 @@ def run(base_url: str) -> dict:
             f"/v1/missions/{mission_id}/revisions/1/activate",
             {"expected_active_revision": None},
         )
+        first_option = preferred_option(first)
+        first_visit_segment = next(
+            segment
+            for segment in first_option["segments"]
+            if segment["segment_type"] == "visit"
+        )
+        execution = post(
+            client,
+            f"/v1/missions/{mission_id}/execution/checkpoints",
+            {
+                "command_id": f"smoke-execution-lock-{run_id}",
+                "based_on_revision": 1,
+                "expected_version": 0,
+                "action": "lock_through",
+                "through_segment_id": first_visit_segment["segment_id"],
+            },
+        )
 
         event_id = f"smoke-event-{run_id}"
         event = post(
@@ -109,9 +126,9 @@ def run(base_url: str) -> dict:
                 "event_type": "task_rescheduled",
                 "based_on_revision": 1,
                 "payload": {
-                    "task_id": mission["visits"][0]["task_id"],
-                    "new_window_start": "2026-08-06T14:00:00+08:00",
-                    "new_window_end": "2026-08-06T16:00:00+08:00",
+                    "task_id": mission["visits"][1]["task_id"],
+                    "new_window_start": "2026-08-07T10:00:00+08:00",
+                    "new_window_end": "2026-08-07T12:00:00+08:00",
                 },
             },
         )
@@ -129,14 +146,33 @@ def run(base_url: str) -> dict:
             f"/v1/missions/{mission_id}/revisions/2/activate",
             {"expected_active_revision": 1},
         )
+        completion = post(
+            client,
+            f"/v1/missions/{mission_id}/execution/checkpoints",
+            {
+                "command_id": f"smoke-execution-complete-{run_id}",
+                "based_on_revision": 2,
+                "expected_version": 1,
+                "action": "complete_through",
+                "through_segment_id": first_visit_segment["segment_id"],
+            },
+        )
         comparison_response = client.get(
             f"/v1/missions/{mission_id}/revisions/1/diff/2"
         )
         comparison_response.raise_for_status()
         comparison = comparison_response.json()
 
-    first_option = preferred_option(first)
     second_option = preferred_option(second)
+    protected_ids = set(execution["protected_segment_ids"])
+    first_protected = {
+        segment["segment_id"]: segment
+        for segment in first_option["segments"]
+        if segment["segment_id"] in protected_ids
+    }
+    second_by_id = {
+        segment["segment_id"]: segment for segment in second_option["segments"]
+    }
     return {
         "status": "passed",
         "service_version": health.json()["version"],
@@ -144,6 +180,12 @@ def run(base_url: str) -> dict:
         "mission_id": mission_id,
         "revisions": [first["revision"], second["revision"]],
         "event_application": event["application_status"],
+        "execution_version": completion["version"],
+        "protected_segment_count": len(protected_ids),
+        "protected_prefix_unchanged": all(
+            second_by_id.get(segment_id) == segment
+            for segment_id, segment in first_protected.items()
+        ),
         "r1_cost_yuan": first_option["costs"]["planned_total_yuan"],
         "r2_cost_yuan": second_option["costs"]["planned_total_yuan"],
         "r1_meal_cost_yuan": first_option["costs"]["meals_yuan"],

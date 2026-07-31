@@ -7,6 +7,7 @@ from app.domain import (
     MealType,
     MissionRead,
     PlanOption,
+    PlanSegment,
     PolicyStatus,
     SegmentType,
 )
@@ -20,12 +21,19 @@ class PlanVerificationError(RuntimeError):
 
 
 class PlanVerifier:
-    version = "plan-verifier-v2"
+    version = "plan-verifier-v3"
 
     def __init__(self, policy_engine: PolicyEngine) -> None:
         self.policy_engine = policy_engine
 
-    def verify(self, mission: MissionRead, option: PlanOption) -> None:
+    def verify(
+        self,
+        mission: MissionRead,
+        option: PlanOption,
+        *,
+        protected_prefix: list[PlanSegment] | None = None,
+        resume_from_segment_id: str | None = None,
+    ) -> None:
         violations: list[str] = []
         segments = option.segments
         if not segments:
@@ -163,6 +171,35 @@ class PlanVerifier:
         ]
         if len(intercity_segments) < 2:
             violations.append("缺少完整去程或返程跨城交通")
+
+        if protected_prefix:
+            protected_by_id = {
+                segment.segment_id: segment for segment in protected_prefix
+            }
+            observed_by_id = {segment.segment_id: segment for segment in segments}
+            if len(protected_by_id) != len(protected_prefix):
+                violations.append("受保护前缀包含重复行程段")
+            for segment_id, expected in protected_by_id.items():
+                observed = observed_by_id.get(segment_id)
+                if observed is None:
+                    violations.append(f"受保护行程段 {segment_id} 被删除")
+                elif observed.model_dump(mode="json") != expected.model_dump(
+                    mode="json"
+                ):
+                    violations.append(f"受保护行程段 {segment_id} 被修改")
+            checkpoint = protected_by_id.get(resume_from_segment_id or "")
+            if checkpoint is None:
+                violations.append("受保护前缀缺少执行检查点")
+            else:
+                protected_ids = set(protected_by_id)
+                for segment in segments:
+                    if (
+                        segment.segment_id not in protected_ids
+                        and segment.start_at < checkpoint.end_at
+                    ):
+                        violations.append(
+                            f"后缀行程段 {segment.segment_id} 越过执行检查点"
+                        )
 
         if violations:
             raise PlanVerificationError(violations)

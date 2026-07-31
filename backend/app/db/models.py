@@ -75,6 +75,17 @@ class MissionRecord(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    execution_checkpoint: Mapped[ExecutionCheckpointRecord | None] = relationship(
+        back_populates="mission",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        uselist=False,
+    )
+    execution_commands: Mapped[list[ExecutionCommandRecord]] = relationship(
+        back_populates="mission",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
 
 class VisitTaskRecord(Base):
@@ -218,3 +229,59 @@ class AgentRunRecord(Base):
     latency_ms: Mapped[float] = mapped_column(Float)
     failure_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ExecutionCheckpointRecord(Base):
+    __tablename__ = "execution_checkpoints"
+
+    mission_id: Mapped[str] = mapped_column(
+        ForeignKey("missions.mission_id", ondelete="CASCADE"), primary_key=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=0)
+    source_revision: Mapped[int] = mapped_column(Integer)
+    locked_through_segment_id: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    locked_through_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_through_segment_id: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    completed_through_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    protected_segments: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    mission: Mapped[MissionRecord] = relationship(
+        back_populates="execution_checkpoint"
+    )
+
+    __mapper_args__ = {
+        "version_id_col": version,
+        "version_id_generator": False,
+    }
+
+
+class ExecutionCommandRecord(Base):
+    __tablename__ = "execution_commands"
+
+    command_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    mission_id: Mapped[str] = mapped_column(
+        ForeignKey("missions.mission_id", ondelete="CASCADE"), index=True
+    )
+    based_on_revision: Mapped[int] = mapped_column(Integer)
+    expected_version: Mapped[int] = mapped_column(Integer)
+    action: Mapped[str] = mapped_column(String(30))
+    through_segment_id: Mapped[str] = mapped_column(String(80))
+    result_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+
+    mission: Mapped[MissionRecord] = relationship(back_populates="execution_commands")

@@ -3,16 +3,19 @@ import { computed, ref } from "vue";
 
 import {
   activateRevision,
+  advanceExecutionCheckpoint,
   checkHealth,
   createMission,
   createReplanEvent,
   diffRevisions,
   generatePlan,
+  getExecutionCheckpoint,
+  getMission,
   interpretMission
 } from "./services/api";
 import type { InterpretMissionResponse, MissionDraft } from "./types/agent";
 import type { Mission, MissionCreate, VisitPriority } from "./types/mission";
-import type { PlanOption, PlanRevision, RevisionDiff } from "./types/planning";
+import type { ExecutionAction, ExecutionCheckpoint, PlanOption, PlanRevision, PlanSegment, RevisionDiff } from "./types/planning";
 
 const exampleText = `2026-08-06从上海虹桥站（上海市闵行区申贵路1500号）出发到杭州，行程很紧，只报高铁二等座。
 任务：2026-08-06 13:30-15:30|西湖区客户现场|杭州市西湖区文三路|90分钟；
@@ -24,6 +27,7 @@ const interpretation = ref<InterpretMissionResponse | null>(null);
 const mission = ref<Mission | null>(null);
 const revision = ref<PlanRevision | null>(null);
 const diff = ref<RevisionDiff | null>(null);
+const execution = ref<ExecutionCheckpoint | null>(null);
 const selectedOptionId = ref("");
 const loading = ref(false);
 const stage = ref("等待输入");
@@ -43,6 +47,12 @@ const sourceModes = computed(() => {
   const modes = new Set(selectedOption.value?.segments.map((segment) => segment.source_mode) || []);
   return Array.from(modes);
 });
+
+const preferredOptionSelected = computed(
+  () => selectedOption.value?.option_id === revision.value?.bundle.preferred_option_id
+);
+
+const checkpointableTypes = new Set(["intercity_transport", "local_transport", "visit"]);
 
 function required<T>(value: T | null | undefined, field: string): T {
   if (value === null || value === undefined || value === "") throw new Error(`缺少 ${field}`);
@@ -104,9 +114,15 @@ function chinaLocalInput(iso: string): string {
 }
 
 function setReplanDefaults(current: Mission) {
-  const task = current.visits.find((item) => item.task_id === replanTaskId.value)
+  const task = current.visits.find((item) => item.task_id === replanTaskId.value && !item.locked && !item.completed)
     || current.visits.find((item) => !item.locked && !item.completed)
-    || current.visits[0];
+    || null;
+  if (!task) {
+    replanTaskId.value = "";
+    replanStart.value = "";
+    replanEnd.value = "";
+    return;
+  }
   replanTaskId.value = task.task_id;
   replanStart.value = chinaLocalInput(task.window_start);
   replanEnd.value = chinaLocalInput(task.window_end);
@@ -145,6 +161,7 @@ async function createAndPlan() {
     revision.value.status = "active";
     mission.value.active_revision = revision.value.revision;
     mission.value.status = "active";
+    execution.value = await getExecutionCheckpoint(mission.value.mission_id);
     setReplanDefaults(mission.value);
     stage.value = "执行方案已激活";
   } catch (reason) {
@@ -186,10 +203,46 @@ async function replan() {
     selectedOptionId.value = next.bundle.preferred_option_id;
     mission.value.active_revision = next.revision;
     mission.value.status = "active";
+    execution.value = await getExecutionCheckpoint(mission.value.mission_id);
+    mission.value = await getMission(mission.value.mission_id);
+    setReplanDefaults(mission.value);
     stage.value = "重规划修订已激活";
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : "重规划失败";
     stage.value = "重规划失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function executionStatus(segment: PlanSegment): "planned" | "locked" | "completed" {
+  const end = new Date(segment.end_at).getTime();
+  if (execution.value?.completed_through_at && end <= new Date(execution.value.completed_through_at).getTime()) {
+    return "completed";
+  }
+  if (execution.value?.protected_segment_ids.includes(segment.segment_id)) return "locked";
+  return "planned";
+}
+
+async function advanceExecution(segment: PlanSegment, action: ExecutionAction) {
+  if (!mission.value?.active_revision || !execution.value || !preferredOptionSelected.value) return;
+  loading.value = true;
+  error.value = "";
+  try {
+    stage.value = action === "lock_through" ? "固化执行前缀" : "推进完成位置";
+    execution.value = await advanceExecutionCheckpoint(mission.value.mission_id, {
+      command_id: `exec-${crypto.randomUUID()}`,
+      based_on_revision: mission.value.active_revision,
+      expected_version: execution.value.version,
+      action,
+      through_segment_id: segment.segment_id
+    });
+    mission.value = await getMission(mission.value.mission_id);
+    setReplanDefaults(mission.value);
+    stage.value = action === "lock_through" ? "执行前缀已锁定" : "完成位置已推进";
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : "执行状态更新失败";
+    stage.value = "执行状态更新失败";
   } finally {
     loading.value = false;
   }
@@ -211,6 +264,7 @@ function reset() {
   mission.value = null;
   revision.value = null;
   diff.value = null;
+  execution.value = null;
   stage.value = "等待输入";
   error.value = "";
 }
@@ -285,7 +339,7 @@ function reset() {
         <article><span>首选评分</span><strong>{{ selectedOption?.score.total.toFixed(1) }}</strong></article>
         <article><span>计划费用</span><strong>¥{{ selectedOption?.costs.planned_total_yuan }}</strong></article>
         <article><span>预算余量</span><strong>¥{{ selectedOption?.costs.remaining_yuan }}</strong></article>
-        <article><span>数据模式</span><strong class="mode-metric">{{ sourceModes.join(" + ") }}</strong></article>
+        <article><span>执行检查点</span><strong>V{{ execution?.version || 0 }}</strong></article>
       </div>
 
       <div class="option-tabs"><button v-for="option in revision.bundle.options" :key="option.option_id" :class="{ active: selectedOption?.option_id === option.option_id }" @click="selectedOptionId = option.option_id"><strong>{{ option.label }}</strong><span>{{ option.score.total.toFixed(1) }} 分 · ¥{{ option.costs.planned_total_yuan }}</span></button></div>
@@ -293,12 +347,13 @@ function reset() {
       <section class="content-card">
         <div class="section-heading compact"><span>03 / EXECUTION TIMELINE</span><h3>{{ selectedOption?.summary }}</h3></div>
         <div class="timeline">
-          <article v-for="segment in selectedOption?.segments" :key="segment.segment_id">
+          <article v-for="segment in selectedOption?.segments" :key="segment.segment_id" :class="`execution-${executionStatus(segment)}`">
             <time>{{ formatTime(segment.start_at) }}<small>{{ formatTime(segment.end_at) }}</small></time>
             <i :class="`segment-${segment.segment_type}`" />
-            <div><strong>{{ segment.title }}</strong><p>{{ segment.from_ref || "" }}<template v-if="segment.to_ref"> → {{ segment.to_ref }}</template></p><span :class="`source-${segment.source_mode}`">{{ segment.source_mode }}</span><small>{{ segment.provider }} · ¥{{ segment.cost_yuan }}</small></div>
+            <div><strong>{{ segment.title }}</strong><p>{{ segment.from_ref || "" }}<template v-if="segment.to_ref"> → {{ segment.to_ref }}</template></p><span :class="`source-${segment.source_mode}`">{{ segment.source_mode }}</span><span class="execution-pill">{{ executionStatus(segment) }}</span><small>{{ segment.provider }} · ¥{{ segment.cost_yuan }}</small><div v-if="checkpointableTypes.has(segment.segment_type) && preferredOptionSelected" class="execution-actions"><button v-if="executionStatus(segment) === 'planned'" :disabled="loading" @click="advanceExecution(segment, 'lock_through')">锁定至此</button><button v-else-if="executionStatus(segment) === 'locked'" :disabled="loading" @click="advanceExecution(segment, 'complete_through')">完成至此</button></div></div>
           </article>
         </div>
+        <p v-if="!preferredOptionSelected" class="provenance-note">执行位置只绑定当前激活的首选方案；切回推荐方案后可推进检查点。</p>
       </section>
 
       <section class="two-column">
@@ -314,7 +369,7 @@ function reset() {
         </article>
         <article class="content-card">
           <div class="section-heading compact"><span>05 / PROVENANCE</span><h3>来源与可复现证据</h3></div>
-          <p class="provenance-note">每个行程段保留 provider 与 source_mode；本次候选快照可用于复盘。</p>
+          <p class="provenance-note">每个行程段保留 provider 与 source_mode；本次数据模式为 {{ sourceModes.join(" + ") }}，候选快照可用于复盘。</p>
           <code v-for="snapshot in revision.bundle.provider_snapshot_ids" :key="snapshot" class="snapshot-id">{{ snapshot }}</code>
           <div v-if="selectedOption?.warnings.length" class="warning-list"><p v-for="warning in selectedOption.warnings" :key="warning">{{ warning }}</p></div>
         </article>
@@ -323,10 +378,10 @@ function reset() {
       <section class="content-card replan-card">
         <div class="section-heading compact"><span>06 / EVENT-DRIVEN REPLAN</span><h3>现场变更后生成新修订</h3><p>选择任务并调整时间窗。系统先应用事件事实，再生成关联修订和差异，最后通过乐观锁激活。</p></div>
         <div class="replan-form">
-          <label>工作任务<select v-model="replanTaskId" @change="mission && setReplanDefaults(mission)"><option v-for="visit in mission?.visits" :key="visit.task_id" :value="visit.task_id">{{ visit.name }}</option></select></label>
+          <label>工作任务<select v-model="replanTaskId" @change="mission && setReplanDefaults(mission)"><option v-for="visit in mission?.visits" :key="visit.task_id" :value="visit.task_id" :disabled="visit.locked || visit.completed">{{ visit.name }}{{ visit.completed ? "（已完成）" : visit.locked ? "（已锁定）" : "" }}</option></select></label>
           <label>新开始时间<input v-model="replanStart" type="datetime-local" /></label>
           <label>新结束时间<input v-model="replanEnd" type="datetime-local" /></label>
-          <button class="primary" :disabled="loading" @click="replan">{{ loading ? stage : "应用事件并重规划" }}</button>
+          <button class="primary" :disabled="loading || !replanTaskId" @click="replan">{{ loading ? stage : "应用事件并重规划" }}</button>
         </div>
         <div v-if="diff" class="diff-panel">
           <div><strong>R{{ diff.from_revision }} → R{{ diff.to_revision }}</strong><span>{{ diff.changes.length }} 处变化 · {{ diff.preserved_segment_count }} 段保持</span></div>

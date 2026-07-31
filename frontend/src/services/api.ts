@@ -1,6 +1,6 @@
 import type { InterpretMissionResponse } from "../types/agent";
 import type { Mission, MissionCreate, ReplanEventCreate, ReplanEventReceipt } from "../types/mission";
-import type { PlanGenerationRequest, PlanRevision, RevisionActivationReceipt, RevisionDiff } from "../types/planning";
+import type { ExecutionCheckpoint, ExecutionCheckpointCommand, PlanGenerationRequest, PlanRevision, RevisionActivationReceipt, RevisionDiff } from "../types/planning";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
@@ -37,6 +37,9 @@ export const interpretMission = (text: string, referenceDate: string) =>
 export const createMission = (mission: MissionCreate) =>
   request<Mission>("/v1/missions", { method: "POST", body: JSON.stringify(mission) });
 
+export const getMission = (missionId: string) =>
+  request<Mission>(`/v1/missions/${missionId}`);
+
 export const generatePlan = (missionId: string, command: PlanGenerationRequest) =>
   request<PlanRevision>(`/v1/missions/${missionId}/plans`, {
     method: "POST",
@@ -57,3 +60,12 @@ export const createReplanEvent = (missionId: string, event: ReplanEventCreate) =
 
 export const diffRevisions = (missionId: string, fromRevision: number, toRevision: number) =>
   request<RevisionDiff>(`/v1/missions/${missionId}/revisions/${fromRevision}/diff/${toRevision}`);
+
+export const getExecutionCheckpoint = (missionId: string) =>
+  request<ExecutionCheckpoint>(`/v1/missions/${missionId}/execution`);
+
+export const advanceExecutionCheckpoint = (missionId: string, command: ExecutionCheckpointCommand) =>
+  request<ExecutionCheckpoint>(`/v1/missions/${missionId}/execution/checkpoints`, {
+    method: "POST",
+    body: JSON.stringify(command)
+  });

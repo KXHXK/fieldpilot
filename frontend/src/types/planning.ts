@@ -10,6 +10,7 @@ export type SegmentType =
 
 export type PolicyStatus = "pass" | "fail" | "warning";
 export type RevisionStatus = "proposed" | "active" | "superseded" | "rejected";
+export type ExecutionAction = "lock_through" | "complete_through";
 
 export interface PlanSegment {
   segment_id: string;
@@ -119,4 +120,25 @@ export interface RevisionActivationReceipt {
   active_revision: number;
   status: RevisionStatus;
   idempotent_replay: boolean;
+}
+
+export interface ExecutionCheckpointCommand {
+  command_id: string;
+  based_on_revision: number;
+  expected_version: number;
+  action: ExecutionAction;
+  through_segment_id: string;
+}
+
+export interface ExecutionCheckpoint {
+  mission_id: string;
+  version: number;
+  source_revision?: number | null;
+  locked_through_segment_id?: string | null;
+  locked_through_at?: string | null;
+  completed_through_segment_id?: string | null;
+  completed_through_at?: string | null;
+  protected_segment_ids: string[];
+  idempotent_replay: boolean;
+  updated_at?: string | null;
 }

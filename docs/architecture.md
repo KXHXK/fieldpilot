@@ -53,16 +53,17 @@ Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出
 - Plan：`request_id` 只表示 API 幂等，`input_event_id` 表示业务触发源；复用 request_id 但参数不同会冲突。
 - Activation：调用方提交 `expected_active_revision`，过期写入返回 409。
 - Event：事件 ID、类型、基线和 payload 必须完全一致才算重放。
+- Execution：`command_id` 负责命令幂等，`expected_version` 负责乐观并发；锁定和完成边界只能沿首选时间线单调前进。
 - Applied events：任务改期/取消/新增/延长、预算和偏好在同一事务内修改事实并保存 before/after 字段。
 - Recorded-only events：天气与交通中断会留痕，但在候选过滤能力接入前不会标记为已应用。
 - Revision diff：比较首选方案的稳定任务/候选身份，返回新增、删除、变化、保留段数，以及成本、评分和告警增量。
 
-当前重规划会重新计算整个未锁定事实集合；代码会拒绝修改 locked/completed task，但尚未实现严格的“保留已执行前缀、只求解后缀”，因此文档与简历不宣称增量最优重算。
+存在执行检查点时，Planner 以激活修订中的受保护段作为不可变前缀，从锁定段的结束时间和位置恢复搜索状态，只对后续任务、交通、住宿与餐饮进行求解。受保护任务从待规划集合移除，已锁定酒店与步行/换乘/成本状态继续传入后缀搜索；Verifier 会逐段比较前缀内容、确认恢复段存在，并拒绝任何越过检查点的后缀。该能力保证“前缀不变、后缀可重算”，但有界 Beam Search 仍是可解释启发式规划，不声称全局最优。
 
 ## 7. 数据与可观测性
 
-SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、ProviderSnapshot、ReplanEvent 和 AgentRun。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。路线与餐饮快照保存查询指纹、归一化候选、来源和安全的 HTTP 事件摘要，不保存 API Key、带 Key 的完整 URL 或原始 Provider 响应。
+SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、ProviderSnapshot、ReplanEvent、AgentRun、ExecutionCheckpoint 和 ExecutionCommand。ExecutionCheckpoint 保存来源修订、锁定/完成边界及受保护段；ExecutionCommand 保存命令指纹与结果，用于安全重放。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。路线与餐饮快照保存查询指纹、归一化候选、来源和安全的 HTTP 事件摘要，不保存 API Key、带 Key 的完整 URL 或原始 Provider 响应。
 
 ## 8. 交付边界
 
-本地已验证 SQLite、42 项 Pytest、三版 Alembic 往返、运行中 HTTP 冒烟、真实浏览器主链路与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。
+本地已验证 SQLite、46 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。

@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "FieldPilot API"
-    app_version: str = "0.3.0-dev"
+    app_version: str = "0.4.0-dev"
     use_mock_tools: bool = True
     use_mock_llm: bool = True
     amap_api_key: str = ""

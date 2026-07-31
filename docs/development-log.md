@@ -285,3 +285,17 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 真实浏览器重新完成 health → interpret → R1 → event → R2 → diff，页面展示 4 个餐次和跨城/市内/住宿/餐饮四类费用，重规划为 8 处变化、9 段保持，控制台无 warning/error。
 - 浏览器前置检查发现 Vite 将 `/api` 代理到 `localhost:8000` 时在当前 Windows 环境命中错误监听端；改为 `127.0.0.1:8000` 后开发代理健康检查恢复，避免 IPv4/IPv6 解析差异造成假故障。
 - 本机仍无真实高德 Key；POI 证据来自官方响应契约的 MockTransport 和无 Key Fixture 链路，不能表述为实时餐厅推荐已上线。
+
+## 2026-07-31｜Stage 9：执行检查点与严格后缀重规划
+
+- 新增 `ExecutionCheckpoint` 与 `ExecutionCommand` 持久化模型和 Alembic `20260731_0004`。检查点保存来源修订、锁定/完成边界及受保护段；命令使用指纹保证相同 command ID 可重放、不同负载冲突，并以版本号进行乐观并发控制。
+- 新增执行状态查询与推进 API。锁定/完成边界只能沿激活首选方案单调向前，完成不得越过锁定位置；任务记录同步更新 locked/completed，最终任务完成后 Mission 进入 completed。
+- Planner 升级为 `bounded-beam-v3`：从检查点结束时间、位置、住宿与累计成本等状态恢复，移除受保护任务，只求解后续任务、交通、住宿与餐饮。Verifier 升级为 `plan-verifier-v3`，逐段校验受保护前缀一致，并拒绝缺失恢复段或越过检查点的后缀。
+- Vue 工作台展示 V0/V1/V2 执行检查点、planned/locked/completed 状态和“锁定至此/完成至此”操作；已锁定或完成任务不会再进入事件重规划选择器。
+
+### 验证结果
+
+- 后端全量 `46 passed`，覆盖锁定与完成的单调推进、严格幂等、过期版本冲突、command ID 冲突、受保护任务拒绝修改、R2 前缀逐字段一致和 Verifier 篡改拦截。
+- Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过，最终 head 为 `20260731_0004`；前端 `vue-tsc --noEmit && vite build` 通过，版本升级为 `0.4.0-dev`。
+- 运行中 HTTP 冒烟通过：R1/R2 均为 710 元，保护 5 个前缀段，`protected_prefix_unchanged=true`，执行版本推进到 2，来源模式保持 `fixture + manual`。
+- 真实浏览器完成 interpret → R1 → lock V1 → 第二任务改期 → R2 → complete V2。页面显示 6 处变化、11 段保持，已完成任务禁用，浏览器控制台无 warning/error。

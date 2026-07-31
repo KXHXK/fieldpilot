@@ -44,10 +44,11 @@ class _SearchState:
     walking_minutes: int
     transfer_count: int
     meal_warnings: tuple[str, ...] = ()
+    replan_from: datetime | None = None
 
 
 class BoundedMissionPlanner:
-    version = "bounded-beam-v2"
+    version = "bounded-beam-v3"
     _meal_windows = {
         MealType.BREAKFAST: (time(7, 0), time(9, 0), "早餐"),
         MealType.LUNCH: (time(11, 30), time(14, 0), "午餐"),
@@ -69,6 +70,9 @@ class BoundedMissionPlanner:
         self,
         mission: MissionRead,
         bundle: CandidateBundle,
+        *,
+        protected_prefix: list[PlanSegment] | None = None,
+        resume_from_segment_id: str | None = None,
     ) -> list[PlanOption]:
         policy = mission.expense_policy
         outbound = [
@@ -92,7 +96,7 @@ class BoundedMissionPlanner:
         else:
             stays = [None]
         reasons: list[str] = []
-        if not outbound:
+        if not protected_prefix and not outbound:
             reasons.append("没有符合交通等级政策的去程候选")
         if not returns:
             reasons.append("没有符合交通等级政策的返程候选")
@@ -101,23 +105,32 @@ class BoundedMissionPlanner:
         if reasons:
             raise NoFeasiblePlanError(reasons)
 
-        states: list[_SearchState] = []
-        for candidate in outbound:
-            for hotel in stays:
-                states.append(
-                    _SearchState(
-                        segments=(self._transport_segment(candidate),),
-                        current_ref=candidate.to_ref,
-                        available_at=candidate.arrive_at,
-                        remaining=tuple(mission.visits),
-                        hotel=hotel,
-                        min_slack_minutes=24 * 60,
-                        walking_minutes=0,
-                        transfer_count=candidate.transfers,
+        if protected_prefix:
+            states = self._seed_protected_states(
+                mission,
+                protected_prefix,
+                resume_from_segment_id,
+                stays,
+            )
+        else:
+            states = []
+            for candidate in outbound:
+                for hotel in stays:
+                    states.append(
+                        _SearchState(
+                            segments=(self._transport_segment(candidate),),
+                            current_ref=candidate.to_ref,
+                            available_at=candidate.arrive_at,
+                            remaining=tuple(mission.visits),
+                            hotel=hotel,
+                            min_slack_minutes=24 * 60,
+                            walking_minutes=0,
+                            transfer_count=candidate.transfers,
+                        )
                     )
-                )
 
-        for _ in range(len(mission.visits)):
+        remaining_count = max((len(state.remaining) for state in states), default=0)
+        for _ in range(remaining_count):
             batches = await asyncio.gather(
                 *[
                     self._append_visit(mission, bundle, state, visit)
@@ -134,13 +147,26 @@ class BoundedMissionPlanner:
 
         options: list[PlanOption] = []
         signatures: set[tuple[str, ...]] = set()
-        finalized_states = await asyncio.gather(
-            *[
-                self._append_return(mission, bundle, state, return_candidate)
-                for state in states
-                for return_candidate in returns
-            ]
-        )
+        completed_states = [
+            state
+            for state in states
+            if any(
+                segment.segment_type == SegmentType.INTERCITY_TRANSPORT
+                and segment.metadata.get("direction") == "return"
+                for segment in state.segments
+            )
+        ]
+        return_states = [state for state in states if state not in completed_states]
+        finalized_states = [
+            *completed_states,
+            *(await asyncio.gather(
+                *[
+                    self._append_return(mission, bundle, state, return_candidate)
+                    for state in return_states
+                    for return_candidate in returns
+                ]
+            )),
+        ]
         meal_states = await asyncio.gather(
             *[
                 self._append_meals(mission, bundle, finalized)
@@ -179,6 +205,106 @@ class BoundedMissionPlanner:
         return [
             option.model_copy(update={"label": labels[index]})
             for index, option in enumerate(options[:3])
+        ]
+
+    def _seed_protected_states(
+        self,
+        mission: MissionRead,
+        protected_prefix: list[PlanSegment],
+        resume_from_segment_id: str | None,
+        stays: list[StayCandidate | None],
+    ) -> list[_SearchState]:
+        if resume_from_segment_id is None:
+            raise NoFeasiblePlanError(["执行检查点缺少恢复行程段"])
+        ordered = sorted(
+            protected_prefix,
+            key=lambda item: (item.start_at, item.end_at, item.segment_id),
+        )
+        checkpoint = next(
+            (
+                item
+                for item in ordered
+                if item.segment_id == resume_from_segment_id
+            ),
+            None,
+        )
+        if checkpoint is None:
+            raise NoFeasiblePlanError(["执行检查点不在受保护前缀内"])
+        cutoff = checkpoint.end_at
+        if any(item.end_at > cutoff for item in ordered):
+            raise NoFeasiblePlanError(["受保护前缀包含检查点之后的行程段"])
+        if not any(
+            item.segment_type == SegmentType.INTERCITY_TRANSPORT
+            and item.metadata.get("direction") == "outbound"
+            for item in ordered
+        ):
+            raise NoFeasiblePlanError(["受保护前缀缺少已锁定去程"])
+        current_ref = checkpoint.to_ref or checkpoint.from_ref
+        if current_ref is None:
+            raise NoFeasiblePlanError(["执行检查点缺少可恢复位置"])
+
+        protected_task_ids = {
+            item.task_id for item in ordered if item.task_id is not None
+        }
+        remaining = tuple(
+            item for item in mission.visits if item.task_id not in protected_task_ids
+        )
+        prefix_hotel_ids = [
+            item.candidate_id
+            for item in ordered
+            if item.segment_type == SegmentType.LODGING
+            and item.candidate_id is not None
+        ]
+        state_hotels = stays
+        if prefix_hotel_ids:
+            state_hotels = [
+                stay
+                for stay in stays
+                if stay is not None and stay.candidate_id == prefix_hotel_ids[-1]
+            ]
+            if not state_hotels:
+                raise NoFeasiblePlanError(
+                    ["已锁定住宿候选不在当前可复现候选快照中"]
+                )
+
+        min_slack = 24 * 60
+        for segment in ordered:
+            if segment.segment_type != SegmentType.VISIT:
+                continue
+            window_end = segment.metadata.get("window_end")
+            if isinstance(window_end, str):
+                slack = int(
+                    (
+                        datetime.fromisoformat(window_end) - segment.end_at
+                    ).total_seconds()
+                    // 60
+                )
+                min_slack = min(min_slack, slack)
+        walking_minutes = sum(
+            int((item.end_at - item.start_at).total_seconds() // 60)
+            for item in ordered
+            if item.segment_type == SegmentType.LOCAL_TRANSPORT
+            and item.metadata.get("mode") == TransportMode.WALKING.value
+        )
+        transfer_count = sum(
+            int(item.metadata.get("transfers", 0) or 0)
+            for item in ordered
+            if item.segment_type
+            in {SegmentType.INTERCITY_TRANSPORT, SegmentType.LOCAL_TRANSPORT}
+        )
+        return [
+            _SearchState(
+                segments=tuple(ordered),
+                current_ref=current_ref,
+                available_at=cutoff,
+                remaining=remaining,
+                hotel=hotel,
+                min_slack_minutes=min_slack,
+                walking_minutes=walking_minutes,
+                transfer_count=transfer_count,
+                replan_from=cutoff,
+            )
+            for hotel in state_hotels
         ]
 
     async def _append_visit(
@@ -419,11 +545,22 @@ class BoundedMissionPlanner:
         trip_start = min(segment.start_at for segment in segments)
         trip_end = max(segment.end_at for segment in segments)
         daily_spend: dict[str, int] = {}
+        existing_meals: set[tuple[str, MealType]] = set()
+        for segment in segments:
+            if segment.segment_type != SegmentType.MEAL_ALLOWANCE:
+                continue
+            local_day = segment.start_at.astimezone(zone).date().isoformat()
+            meal_type_value = segment.metadata.get("meal_type")
+            if isinstance(meal_type_value, str):
+                existing_meals.add((local_day, MealType(meal_type_value)))
+            daily_spend[local_day] = daily_spend.get(local_day, 0) + segment.cost_yuan
         warnings: list[str] = []
         current_day = mission.start_date
         while current_day <= mission.end_date:
             day_key = current_day.isoformat()
             for meal_type, (local_start, local_end, label) in self._meal_windows.items():
+                if (day_key, meal_type) in existing_meals:
+                    continue
                 slot_start = datetime.combine(
                     current_day,
                     local_start,
@@ -436,6 +573,10 @@ class BoundedMissionPlanner:
                 ).astimezone(trip_start.tzinfo)
                 active_start = max(slot_start, trip_start)
                 active_end = min(slot_end, trip_end)
+                if state.replan_from is not None:
+                    if active_end <= state.replan_from:
+                        continue
+                    active_start = max(active_start, state.replan_from)
                 if active_end <= active_start:
                     continue
                 remaining_cap = (
@@ -707,6 +848,7 @@ class BoundedMissionPlanner:
             metadata={
                 **candidate.metadata,
                 "mode": candidate.mode.value,
+                "direction": candidate.direction,
                 "cabin_class": candidate.cabin_class,
                 "transfers": candidate.transfers,
                 "reliability_score": candidate.reliability_score,
