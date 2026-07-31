@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: fieldpilot-api
+    runtime: docker
+    plan: free
+    region: singapore
+    repo: https://github.com/KXHXK/fieldpilot
+    branch: main
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/ready
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: APP_VERSION
+        value: 0.5.0-dev
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_AUTO_CREATE
+        value: "false"
+      - key: USE_MOCK_LLM
+        value: "true"
+      - key: LOCAL_ROUTE_PROVIDER
+        value: fixture
+      - key: CORS_ORIGINS
+        value: https://fieldpilot-kxh.netlify.app
+      - key: PROVIDER_TIMEOUT_SECONDS
+        value: "3"
+      - key: PROVIDER_MAX_RETRIES
+        value: "1"
+      - key: PROVIDER_MAX_CONCURRENCY
+        value: "4"
+      - key: PROVIDER_MAX_LIVE_CALLS
+        value: "32"

@@ -23,12 +23,21 @@ flowchart LR
 
 Agent 只把自然语言转为 `MissionDraft` 或澄清问题，工具数固定为 0。它不接触数据库、HTTP、文件和预订动作。应用服务将已确认草案转成 Mission；Provider 采集候选；确定性规划器计算方案；Verifier 在写入修订前独立复算不变量。
 
+这里的 Agent 特性不等于“让模型自由调用一切”：
+
+- **目标与任务拆解**：用户目标先转成类型化 Mission、VisitTask、ExpensePolicy，再进入候选采集、规划、校验和激活状态机。
+- **上下文管理**：短期语义上下文只包含本次文本、参考日期和时区；长期业务上下文由 Mission、Revision、Event、ProviderSnapshot 和 ExecutionCheckpoint 持久化。重规划读取当前事实与受保护前缀，不把整段聊天历史反复塞给模型。
+- **工具边界**：模型工具集合显式为空，防止不可信文字直接触发网络或副作用。高德/Fixture 等工具由应用服务在草案确认后通过 `CandidateProvider` 类型化端口调用，具有超时、重试、并发、预算、缓存、来源和降级治理。
+- **反馈闭环**：Policy Engine 和独立 Verifier 给出可解释约束反馈；现场事件形成新 Revision 与 Diff，而不是覆盖旧计划。
+- **可观测与评测**：AgentRun 保存输入指纹、Prompt/模型版本、模式、Token、延迟与失败类型；Mock 回归、TestModel 契约和真实模型固定集互相分离。
+
 ## 3. 为什么只使用 PydanticAI
 
 - 需要：类型化结构输出、模型供应商适配、请求/Token 限额与可测试的模型边界，PydanticAI 正好覆盖。
 - 不需要 CrewAI Flows：当前只有一个语义 Agent，状态与恢复由数据库 Mission/Revision 状态机承担；引入角色对话只会增加不可控路径。
 - 不需要 LlamaIndex：当前没有需要引用的 SOP、票据或企业知识库；为一份报销结构表建立 RAG 没有收益。
 - 不引入 Pydantic Evals 包：已有版本化 JSONL/JSON 固定集和确定性评测脚本。只有需要实验矩阵、评测后端或系统化报告时才迁移。
+- 不引入 MCP：当前 Provider 只由 FieldPilot 后端消费，Python 类型化端口能提供更直接的权限、超时、预算和审计边界。若同一地图/差旅能力需要被 Codex、桌面助手或多个 Agent 客户端跨进程复用，再把只读查询暴露为 MCP server；预订、支付和报销仍需单独授权与人工确认。
 
 ## 4. 规划与验证
 
@@ -45,7 +54,7 @@ Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出
 
 `CandidateProvider` 隔离规划器与数据源。高德适配实现地理编码、驾车/出租车、步行、骑行、公交路线，以及 v5 `/place/around` 周边餐饮 POI；路线和餐饮查询都具备异步调用、有限并发、超时、一次重试、调用预算、缓存与 in-flight 合并。餐饮只接受包含人均消费且落在剩余餐补内的 POI，缺价、高价或查询失败时不会伪造实时价格，而是记录原因并降级为冻结 Fixture。每个 segment、warning 和 ProviderSnapshot 都保留 `live / mixed / fixture` 与失败类别。
 
-铁路、航班、酒店当前为版本固定 Fixture，不抓取 12306 内部接口，也不冒充实时库存或价格。餐饮同时具备高德真实适配路径和 Fixture 降级，但本机无真实 Key；高德路线/餐饮和 LLM 均只完成代码契约测试，尚未做公网验收。
+铁路、航班、酒店当前为版本固定 Fixture，不抓取 12306 内部接口，也不冒充实时库存或价格。餐饮同时具备高德真实适配路径和 Fixture 降级，但本机无真实 Key；高德路线/餐饮和 LLM 均已具备真实调用与独立评测入口，在凭证运行证据生成前仍标记为待验收。
 
 ## 6. 状态、幂等和重规划
 
@@ -66,4 +75,4 @@ SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、P
 
 ## 8. 交付边界
 
-本地已验证 SQLite、46 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。独立 Netlify 静态专题已上线并完成 HTTPS、SPA 回退、CDN 资源与安全响应头验证；它不连接可写后端。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与 FastAPI/PostgreSQL 公网部署仍是待验证项。
+本地已验证 SQLite、47 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。独立 Netlify 静态专题已上线并完成 HTTPS、SPA 回退、CDN 资源与安全响应头验证；它不连接可写后端。仓库提供 PostgreSQL Compose、Nginx 反向代理、Render Blueprint、Neon URL 归一化、健康/就绪检查和 GitHub Actions；当前机器没有 Docker CLI，Render/Neon 也未授权，因此容器运行与公网后端仍是待验证项。

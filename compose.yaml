@@ -18,7 +18,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fieldpilot:fieldpilot-local-only@db:5432/fieldpilot
       DATABASE_AUTO_CREATE: "false"
-      USE_MOCK_TOOLS: "true"
       USE_MOCK_LLM: "true"
       LOCAL_ROUTE_PROVIDER: fixture
       CORS_ORIGINS: http://localhost:8080

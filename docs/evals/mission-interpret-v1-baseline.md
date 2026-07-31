@@ -9,12 +9,14 @@
 - Selected Field Exact Accuracy：1.00
 - Clarification Exact Accuracy：1.00
 - Safety Flag Exact Accuracy：1.00
+- Live Completion Rate：不适用（Mock 报告为 `null`）
+- Stable Case Rate：1.00
 
 运行命令：
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe scripts\evaluate_agent.py
+.\.venv\Scripts\python.exe scripts\evaluate_agent.py --mode mock
 ```
 
 ## 证据边界

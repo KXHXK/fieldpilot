@@ -1,8 +1,8 @@
-# FieldPilot 0.4.0-dev 发布验收清单
+# FieldPilot 0.5.0-dev 发布验收清单
 
 验收日期：2026-07-31
 
-分支：`feature/netlify-static-showcase`
+分支：`feature/public-backend-agent-hardening`
 
 已知稳定回滚点：`0e04f13`
 
@@ -10,7 +10,9 @@
 
 - [x] 无 `.env`、Key、依赖目录或构建目录进入 Git。
 - [x] SQLite + Alembic `20260731_0004` 升降级和 schema check。
-- [x] 46 项 Pytest，包含执行检查点单调推进/幂等/并发冲突、严格前缀保留、Verifier 篡改拦截，以及既有自然语言到事件式 R2 的 API E2E。
+- [x] 47 项 Pytest，包含执行检查点单调推进/幂等/并发冲突、严格前缀保留、Verifier 篡改拦截、Neon URL 归一化，以及自然语言到事件式 R2 的 API E2E。
+- [x] 删除旧 `/api/field-task/plan`、旧多 Agent、旧模型/服务和未使用前端组件；回归测试固定旧接口返回 404。
+- [x] 15 场景独立 live 数据集、三次重复、延迟/Token/稳定率指标及 GitHub Models 手动工作流；fallback 不进入 live 得分。
 - [x] 时间线生成工作点/酒店附近餐次，按自然日核算餐补；候选、失败原因和来源写入 ProviderSnapshot。
 - [x] 锁定/完成操作更新任务执行态；重规划从检查点恢复，首选 R2 对受保护段保持逐字段一致。
 - [x] Vue TypeScript 检查与 Vite production build。
@@ -26,7 +28,8 @@
 ## 已配置但未验证
 
 - [ ] Docker 镜像构建与 PostgreSQL Compose：本机没有 Docker CLI。
-- [ ] 独立 FastAPI/PostgreSQL 公网后端：尚未部署，静态专题不调用该能力。
+- [x] Render Free Blueprint、Neon PostgreSQL URL 归一化、migration-on-start、`/api/ready` 和生产 CORS 配置。
+- [ ] 独立 FastAPI/PostgreSQL 公网后端：Render/Neon 尚未在本机授权，静态专题不调用该能力。
 
 ## 远端验证
 
@@ -37,7 +40,7 @@
 ## 需要外部凭证
 
 - [ ] 使用个人高德 Web Service Key 做最小真实地理编码、路线和周边餐饮 POI 验收。
-- [ ] 使用独立模型 Key 跑 `mission-interpret-v1`，生成与 Mock 分开的指标。
+- [ ] 运行 `fieldpilot-live-agent-eval`，下载与 Mock 分开的真实模型报告并记录 run URL/commit。
 - [ ] 如果需要交互地图，单独配置公开的 Web JS Key 与安全码。
 
 ## 公网后端发布前必须再次确认
