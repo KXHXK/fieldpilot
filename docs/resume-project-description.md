@@ -10,9 +10,9 @@ PydanticAI、FastAPI、Pydantic v2、SQLAlchemy/Alembic、Vue 3/TypeScript、htt
 - 针对本人跨省市外勤中交通、住宿、多工作点时窗与报销规则分散的问题，设计自然语言采集、确定性规划、独立校验、事件重规划和版本审计闭环；将 LLM 限定为严格 MissionDraft 解析，避免模型编造车次、价格和合规结论。
 - 实现异步 Candidate Provider 与有界 Beam Search，融合跨城交通、住宿和市内路线候选，Policy Engine 过滤席别/舱位及费用上限，Verifier 独立复算任务覆盖、时间冲突、分类成本和政策不变量，输出最多 3 个带评分明细的可解释方案。
 - 封装高德地理编码与 v5 路径规划适配器，加入显式超时、有限重试/并发/调用预算、查询缓存、in-flight 去重和按路线方式降级；通过 ProviderSnapshot 与 `live/mixed/fixture` 标记保留来源和失败证据。
-- 建立 Mission/PlanRevision/ReplanEvent/AgentRun 持久化：使用输入指纹、请求幂等、乐观版本冲突、事件原子应用和结构化 Revision Diff 支持途中改期；完成 38 项后端测试、Alembic 往返和 Vue 生产构建。
+- 建立 Mission/PlanRevision/ReplanEvent/AgentRun 持久化：使用输入指纹、请求幂等、乐观版本冲突、事件原子应用和结构化 Revision Diff 支持途中改期；完成 39 项后端测试、Alembic 往返、运行中 HTTP 冒烟和 Vue 生产构建。
 
-最后一条如受篇幅限制，可把“38 项”改为“覆盖领域约束、故障注入、Agent 契约和事件重规划的自动化测试”，避免测试数后续变化造成简历过期。
+最后一条如受篇幅限制，可把“39 项”改为“覆盖领域约束、故障注入、Agent 契约和事件重规划的自动化测试”，避免测试数后续变化造成简历过期。
 
 ## 60 秒讲法
 

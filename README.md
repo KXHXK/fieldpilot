@@ -8,6 +8,8 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 `feature/fieldpilot-v1-domain` 已完成 Stage 1～6 的本地闭环：领域持久化、有限搜索规划、高德路线适配与降级、Agent 解析与审计、事件驱动重规划、修订差异和 Vue v1 工作台。高德与 LLM 真实密钥、Docker 容器和公网部署仍未在本机完成验证，相关能力不会冒充已上线。
 
+![FieldPilot v1 工作台](docs/fieldpilot-workbench.png)
+
 ## 已完成的业务闭环
 
 ```text
@@ -128,7 +130,14 @@ cd ..\frontend
 npm run build
 ```
 
-当前本机结果（2026-07-30）：后端 `38 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 `vue-tsc --noEmit && vite build` 成功。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
+当前本机结果（2026-07-31）：后端 `39 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 `vue-tsc --noEmit && vite build` 成功；运行中 HTTP 冒烟与真实浏览器主链路通过。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
+
+运行中的完整 HTTP 冒烟（需要先启动后端）：
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\smoke_workflow.py
+```
 
 ## 来源与二次开发说明
 
@@ -144,3 +153,5 @@ npm run build
 - [企业级目标设计（Target v1.0）](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)
 - [开发日志](docs/development-log.md)
 - [Mission Interpret v1 Mock 基线报告](docs/evals/mission-interpret-v1-baseline.md)
+- [五分钟演示与面试讲解](docs/demo-guide.md)
+- [发布验收清单](docs/release-readiness.md)

@@ -65,4 +65,4 @@ SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、P
 
 ## 8. 交付边界
 
-本地已验证 SQLite、38 项 Pytest、三版 Alembic 往返与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。
+本地已验证 SQLite、39 项 Pytest、三版 Alembic 往返、运行中 HTTP 冒烟、真实浏览器主链路与 Vue 生产构建。仓库提供 PostgreSQL Compose、Nginx 反向代理、健康/就绪检查和 GitHub Actions，但当前机器没有 Docker CLI，容器运行与公网部署仍是待验证项。

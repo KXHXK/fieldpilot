@@ -29,6 +29,24 @@ jobs:
           alembic check
           alembic downgrade base
           alembic upgrade head
+      - name: Smoke live HTTP workflow
+        working-directory: backend
+        env:
+          USE_MOCK_TOOLS: "true"
+          USE_MOCK_LLM: "true"
+          DATABASE_URL: sqlite+aiosqlite:///./ci.db
+          DATABASE_AUTO_CREATE: "false"
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/fieldpilot-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill $api_pid' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8000/api/ready > /dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          python scripts/smoke_workflow.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

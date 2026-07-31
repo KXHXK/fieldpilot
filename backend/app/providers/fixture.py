@@ -167,11 +167,19 @@ class FixtureCandidateProvider:
         }
         fingerprint_source = {
             "provider": self.provider_name,
-            "mission_id": mission.mission_id,
-            "origin": mission.origin.city,
+            "origin": mission.origin.model_dump(mode="json"),
             "destination": destination_city,
             "start_date": mission.start_date.isoformat(),
             "end_date": mission.end_date.isoformat(),
+            "visits": [
+                {
+                    "location": visit.location.model_dump(mode="json"),
+                    "window_start": visit.window_start.isoformat(),
+                    "window_end": visit.window_end.isoformat(),
+                    "duration_minutes": visit.duration_minutes,
+                }
+                for visit in mission.visits
+            ],
         }
         fingerprint = hashlib.sha256(
             json.dumps(fingerprint_source, sort_keys=True).encode("utf-8")
@@ -202,8 +210,16 @@ class FixtureCandidateProvider:
         preferred_modes: list[str],
         timezone_name: str = "Asia/Shanghai",
     ) -> list[TransportCandidate]:
+        route_fingerprint = json.dumps(
+            {
+                "from": from_location.model_dump(mode="json"),
+                "to": to_location.model_dump(mode="json"),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
         seed = int(
-            hashlib.sha256(f"{from_ref}>{to_ref}".encode("utf-8")).hexdigest()[:6],
+            hashlib.sha256(route_fingerprint.encode("utf-8")).hexdigest()[:6],
             16,
         )
         profiles = {
@@ -219,7 +235,7 @@ class FixtureCandidateProvider:
             duration, price, transfers, reliability = profiles[mode_name]
             mode = TransportMode(mode_name)
             candidate_hash = hashlib.sha1(
-                f"{from_ref}>{to_ref}:{mode_name}".encode("utf-8")
+                f"{route_fingerprint}:{mode_name}".encode("utf-8")
             ).hexdigest()[:12]
             candidates.append(
                 TransportCandidate(

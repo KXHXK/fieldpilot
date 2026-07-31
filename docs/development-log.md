@@ -254,5 +254,15 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - Vue 页面升级为“自然语言输入 -> Agent 草案/澄清 -> Mission -> 三方案比较 -> 来源/政策 -> 事件重规划 -> Revision Diff”的完整工作台。
 - 页面展示 Agent trace、模型/Prompt/耗时、segment provider/source mode、ProviderSnapshot ID 和 Fixture 警告。
 - 新增 PostgreSQL Compose、Nginx 反向代理、API migration-on-start 与 GitHub Actions 后端/迁移/前端验证流程。
-- 本机验证：`38 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 TypeScript 与 Vite 生产构建通过；`git diff --check` 通过。
+- 本阶段验证：`38 passed`；Alembic `upgrade head / check / downgrade 0002 / upgrade head` 通过；前端 TypeScript 与 Vite 生产构建通过；`git diff --check` 通过。
 - 本机没有 Docker CLI，因此 Compose 和镜像只完成配置审查，不能写成已实际运行；真实高德和模型 Key 仍未测试。
+
+## 2026-07-31｜Stage 7：真实浏览器验收与演示交付
+
+- 按正式本地端口启动 FastAPI 8000 与 Vite，直接 health/ready、Vite API 代理和 localhost CORS 均通过。
+- 在真实浏览器完成健康检查、自然语言解析、R1 生成/激活、任务改期、R2 生成/激活和 Revision Diff；固定场景显示 5 处变化、8 段保持。
+- 浏览器控制台无 warning/error；首屏 1440px 截图加入 README。
+- 新增 `scripts/smoke_workflow.py`，可对运行中 API 重复执行完整 v1 HTTP 主链路并输出结构化摘要。
+- 新增五分钟演示手册与发布验收清单，明确已验证、仅配置和需要外部凭证的三类状态。
+- 运行中冒烟发现相同业务输入重建后 Fixture 费用会因随机 mission/task ID 改变；将查询指纹、路线种子和候选 ID 改为基于地点/日期等业务字段，并新增跨 Mission ID 稳定性测试。连续两次完整冒烟的 R1/R2 费用均为 571 元。
+- Stage 7 完成后后端全量测试为 `39 passed`。

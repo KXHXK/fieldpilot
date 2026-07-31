@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import httpx
@@ -10,6 +11,7 @@ from app.config import settings
 from app.domain import MissionRead, PlanRevisionRead, SegmentType
 from app.main import app
 from app.planning import PlanVerificationError, PlanVerifier, PolicyEngine
+from app.providers.fixture import FixtureCandidateProvider
 
 
 def load_mission_payload() -> dict:
@@ -293,3 +295,51 @@ async def test_amap_mode_without_key_persists_honest_fallback_snapshot(
             set(trace["failure_types"].values()) == {"missing_api_key"}
             for trace in snapshot.payload["queries"]
         )
+
+
+@pytest.mark.asyncio
+async def test_fixture_routes_are_stable_across_equivalent_mission_ids() -> None:
+    payload = load_mission_payload()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first_payload = await create_mission(client, deepcopy(payload))
+        second_payload = await create_mission(client, deepcopy(payload))
+
+    first = MissionRead.model_validate(first_payload)
+    second = MissionRead.model_validate(second_payload)
+    provider = FixtureCandidateProvider()
+    first_bundle = provider.search(first)
+    second_bundle = provider.search(second)
+    first_routes = await provider.local_routes(
+        first.visits[0].task_id,
+        first.visits[1].task_id,
+        first.visits[0].location,
+        first.visits[1].location,
+        first.visits[0].window_end,
+        first.transport_preferences.preferred_local_modes,
+    )
+    second_routes = await provider.local_routes(
+        second.visits[0].task_id,
+        second.visits[1].task_id,
+        second.visits[0].location,
+        second.visits[1].location,
+        second.visits[0].window_end,
+        second.transport_preferences.preferred_local_modes,
+    )
+
+    assert first.mission_id != second.mission_id
+    assert first.visits[0].task_id != second.visits[0].task_id
+    assert first_bundle.query_fingerprint == second_bundle.query_fingerprint
+    assert [route.candidate_id for route in first_routes] == [
+        route.candidate_id for route in second_routes
+    ]
+    assert [route.price_yuan for route in first_routes] == [
+        route.price_yuan for route in second_routes
+    ]
+    assert [
+        int((route.arrive_at - route.depart_at).total_seconds())
+        for route in first_routes
+    ] == [
+        int((route.arrive_at - route.depart_at).total_seconds())
+        for route in second_routes
+    ]
