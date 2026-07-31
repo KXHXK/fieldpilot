@@ -2,9 +2,9 @@
 
 验收日期：2026-07-31
 
-分支：`feature/execution-checkpoint-replan`
+分支：`feature/netlify-static-showcase`
 
-已知稳定回滚点：`1df9f6c`
+已知稳定回滚点：`0e04f13`
 
 ## 已验证
 
@@ -20,15 +20,19 @@
 - [x] 真实浏览器完成 interpret → R1 → lock V1 → event → R2 → complete V2 → diff。
 - [x] 浏览器控制台无 warning/error。
 - [x] Fixture、manual、mock 状态在页面明确显示。
+- [x] 独立静态专题使用 `showcase` 构建模式，不向访客伪装可写公网后端。
+- [x] 专题页桌面/移动端无横向溢出，R1/R2 时间线切换有效，浏览器控制台无 warning/error。
 
 ## 已配置但未验证
 
 - [ ] Docker 镜像构建与 PostgreSQL Compose：本机没有 Docker CLI。
-- [ ] Netlify 静态前端和独立后端部署：尚未配置生产 URL。
+- [ ] 独立 FastAPI/PostgreSQL 公网后端：尚未部署，静态专题不调用该能力。
 
 ## 远端验证
 
 - [x] GitHub Actions `verify`：后端测试、Alembic schema check 与前端构建通过。
+- [x] Netlify 静态专题生产地址：<https://fieldpilot-kxh.netlify.app/>。
+- [x] 生产 deploy `6a6c82f34f699af981dae355`：根路径、SPA 回退、JS/CSS CDN 资源与安全响应头通过 HTTP 验证。
 
 ## 需要外部凭证
 
@@ -36,7 +40,7 @@
 - [ ] 使用独立模型 Key 跑 `mission-interpret-v1`，生成与 Mock 分开的指标。
 - [ ] 如果需要交互地图，单独配置公开的 Web JS Key 与安全码。
 
-## 发布前必须再次确认
+## 公网后端发布前必须再次确认
 
 - [ ] 后端先部署并直接访问 HTTPS `/api/health` 和 `/api/ready`。
 - [ ] CORS 只允许实际前端 origin。

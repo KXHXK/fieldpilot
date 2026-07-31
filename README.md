@@ -2,11 +2,13 @@
 
 FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地点、任务时间窗、紧密程度、交通偏好和公司报销规则转换为可验证、可比较、可动态重规划的执行方案。
 
+**在线专题：** [fieldpilot-kxh.netlify.app](https://fieldpilot-kxh.netlify.app/) · **源代码：** [github.com/KXHXK/fieldpilot](https://github.com/KXHXK/fieldpilot)
+
 当前开发版本是可本地运行的 `0.4.0-dev`。PydanticAI 单 Agent 只负责自然语言到严格 MissionDraft 的转换；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
-当前实现已完成领域持久化、有限搜索规划、高德路线与餐饮适配及降级、Agent 解析与审计、事件驱动重规划、执行检查点、严格后缀重规划、修订差异和 Vue 工作台闭环。高德与 LLM 真实密钥、Docker 容器和公网部署仍未在本机完成验证，相关能力不会冒充已上线。
+当前实现已完成领域持久化、有限搜索规划、高德路线与餐饮适配及降级、Agent 解析与审计、事件驱动重规划、执行检查点、严格后缀重规划、修订差异和 Vue 工作台闭环。面向访客的静态专题页已独立部署；可写的 FastAPI/PostgreSQL 公网后端、高德与 LLM 真实密钥、Docker 容器仍未完成验证，相关能力不会冒充已上线。
 
 ![FieldPilot v1 工作台](docs/fieldpilot-workbench.png)
 
@@ -52,7 +54,14 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 | ExecutionCheckpoint 与严格后缀重规划 | 已实现命令幂等、版本冲突、单调锁定/完成和前缀逐段一致性校验 | 只重算检查点后的可变后缀；有界搜索不声称全局最优 |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 当前业务不需要 |
 | RAG、审批流、SSE、全局路线最优化 | 未实现 | 不属于当前已验收能力 |
-| 独立公网部署 | 未完成 | 不提供或复用其他项目 URL |
+| 独立公网静态专题页 | 已部署并完成 HTTP/CDN 验证 | 独立 URL，只展示经验证的架构、流程与边界，不连接可写后端 |
+| FastAPI/PostgreSQL 公网服务 | 未部署 | 完整交互工作台仍需本地启动，不将静态展示冒充在线业务系统 |
+
+## 公网静态专题
+
+[FieldPilot 在线专题](https://fieldpilot-kxh.netlify.app/) 使用独立的 Vite `showcase` 构建模式，展示真实问题、Agent 与确定性系统的职责边界、检查点后缀重规划、架构取舍和验证证据。它与本地 Vue 工作台共用已验证的业务事实，但不调用或模拟一个不存在的公网后端。
+
+当前生产部署为 Netlify deploy `6a6c82f34f699af981dae355`。已验证根路径和 SPA 回退返回 HTTPS 200、指纹化 JS/CSS 资源由 CDN 正确提供，CSP、COOP、`nosniff`、Referrer-Policy 与 Permissions-Policy 响应头生效。完整任务录入、持久化和重规划操作请按下文启动本地前后端。
 
 ## 本地运行
 
@@ -132,7 +141,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前本机结果（2026-07-31）：后端 `46 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；前端 `vue-tsc --noEmit && vite build` 成功；运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-07-31）：后端 `46 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；完整工作台与静态专题两种前端生产构建成功；本地运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀；公网专题的 HTTPS、SPA 回退、指纹资源与安全响应头通过检查。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 
