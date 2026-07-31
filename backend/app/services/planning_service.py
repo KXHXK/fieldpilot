@@ -38,6 +38,7 @@ from app.services.mission_service import (
     RevisionConflictError,
     get_mission,
 )
+from app.services.execution_service import get_protected_prefix
 
 
 class PlanRevisionNotFoundError(LookupError):
@@ -104,15 +105,28 @@ async def generate_plan_revision(
             )
 
     mission = await get_mission(session, mission_id)
+    protected_prefix, resume_from_segment_id = await get_protected_prefix(
+        session, mission_id
+    )
     provider = create_candidate_provider(settings)
     policy_engine = PolicyEngine()
     planner = BoundedMissionPlanner(provider, policy_engine)
     verifier = PlanVerifier(policy_engine)
     try:
         candidates = provider.search(mission)
-        options = await planner.plan(mission, candidates)
+        options = await planner.plan(
+            mission,
+            candidates,
+            protected_prefix=protected_prefix,
+            resume_from_segment_id=resume_from_segment_id,
+        )
         for option in options:
-            verifier.verify(mission, option)
+            verifier.verify(
+                mission,
+                option,
+                protected_prefix=protected_prefix,
+                resume_from_segment_id=resume_from_segment_id,
+            )
         route_snapshots = provider.provider_snapshots()
     finally:
         await provider.aclose()

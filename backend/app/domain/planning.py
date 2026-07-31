@@ -55,6 +55,11 @@ class RevisionStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class ExecutionAction(StrEnum):
+    LOCK_THROUGH = "lock_through"
+    COMPLETE_THROUGH = "complete_through"
+
+
 class TransportCandidate(StrictModel):
     candidate_id: str
     provider: str
@@ -253,3 +258,24 @@ class RevisionActivationRead(StrictModel):
     active_revision: int
     status: RevisionStatus
     idempotent_replay: bool
+
+
+class ExecutionCheckpointCommand(StrictModel):
+    command_id: str = Field(min_length=8, max_length=120)
+    based_on_revision: int = Field(ge=1)
+    expected_version: int = Field(ge=0)
+    action: ExecutionAction
+    through_segment_id: str = Field(min_length=8, max_length=80)
+
+
+class ExecutionCheckpointRead(StrictModel):
+    mission_id: str
+    version: int = Field(ge=0)
+    source_revision: int | None = Field(default=None, ge=1)
+    locked_through_segment_id: str | None = None
+    locked_through_at: datetime | None = None
+    completed_through_segment_id: str | None = None
+    completed_through_at: datetime | None = None
+    protected_segment_ids: list[str] = Field(default_factory=list)
+    idempotent_replay: bool = False
+    updated_at: datetime | None = None

@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db_session
 from app.domain import (
     ActivateRevisionRequest,
+    ExecutionCheckpointCommand,
+    ExecutionCheckpointRead,
     MissionCreate,
     MissionRead,
     PlanGenerationRequest,
@@ -12,6 +14,13 @@ from app.domain import (
     ReplanEventRead,
     RevisionActivationRead,
     RevisionDiffRead,
+)
+from app.services.execution_service import (
+    ExecutionCommandConflictError,
+    ExecutionTransitionError,
+    ExecutionVersionConflictError,
+    advance_execution_checkpoint,
+    get_execution_checkpoint,
 )
 from app.services.mission_service import (
     EventApplicationError,
@@ -55,6 +64,63 @@ async def get_mission_endpoint(
         return await get_mission(session, mission_id)
     except MissionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="任务不存在") from exc
+
+
+@router.get(
+    "/{mission_id}/execution",
+    response_model=ExecutionCheckpointRead,
+)
+async def get_execution_checkpoint_endpoint(
+    mission_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> ExecutionCheckpointRead:
+    try:
+        return await get_execution_checkpoint(session, mission_id)
+    except MissionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在") from exc
+
+
+@router.post(
+    "/{mission_id}/execution/checkpoints",
+    response_model=ExecutionCheckpointRead,
+)
+async def advance_execution_checkpoint_endpoint(
+    mission_id: str,
+    command: ExecutionCheckpointCommand,
+    session: AsyncSession = Depends(get_db_session),
+) -> ExecutionCheckpointRead:
+    try:
+        return await advance_execution_checkpoint(session, mission_id, command)
+    except MissionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在") from exc
+    except RevisionConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "revision_conflict",
+                "expected_revision": exc.expected,
+                "active_revision": exc.actual,
+            },
+        ) from exc
+    except ExecutionVersionConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "execution_version_conflict",
+                "expected_version": exc.expected,
+                "actual_version": exc.actual,
+            },
+        ) from exc
+    except ExecutionCommandConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "execution_command_conflict", "message": str(exc)},
+        ) from exc
+    except ExecutionTransitionError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 @router.post("/{mission_id}/events", response_model=ReplanEventRead)
