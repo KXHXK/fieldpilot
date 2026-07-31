@@ -2,7 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-os.environ.setdefault("USE_MOCK_TOOLS", "true")
 os.environ.setdefault("USE_MOCK_LLM", "true")
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["DATABASE_AUTO_CREATE"] = "false"

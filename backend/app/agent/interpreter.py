@@ -56,7 +56,7 @@ class FieldPilotMissionInterpreter:
             )
             usage = result.usage
             return InterpreterRun(
-                output=complete_clarifications(result.output), mode=AgentMode.LIVE,
+                output=finalize_output(result.output, command.text), mode=AgentMode.LIVE,
                 model=self.settings.model_name, latency_ms=round((perf_counter() - started) * 1000, 2),
                 request_count=usage.requests, input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
             )
@@ -75,7 +75,7 @@ class FieldPilotMissionInterpreter:
     def _mock(self, command: InterpretMissionRequest, mode: AgentMode,
               failure: str | None = None, started: float | None = None) -> InterpreterRun:
         begun = started or perf_counter()
-        return InterpreterRun(complete_clarifications(_parse_fixture(command)), mode,
+        return InterpreterRun(finalize_output(_parse_fixture(command), command.text), mode,
                               "deterministic-mock-v1", round((perf_counter() - begun) * 1000, 2),
                               failure_type=failure)
 
@@ -95,6 +95,17 @@ def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
                                         p.meal_daily_cap_yuan, p.local_transport_daily_cap_yuan, p.trip_total_cap_yuan]):
         add("expense_policy", "请补充交通等级及住宿、餐饮、市内交通和总预算。", "缺少报销边界不能判断合规。")
     return output.model_copy(update={"clarifications": questions})
+
+
+def finalize_output(output: AgentMissionOutput, user_text: str) -> AgentMissionOutput:
+    """Apply deterministic safety and completeness checks after every model mode."""
+    flags = list(output.safety_flags)
+    if (
+        re.search(r"忽略.{0,12}(系统|规则|指令)|访问文件|执行命令|泄露", user_text, re.I)
+        and "prompt_injection_like_text" not in flags
+    ):
+        flags.append("prompt_injection_like_text")
+    return complete_clarifications(output.model_copy(update={"safety_flags": flags}))
 
 
 def is_ready(output: AgentMissionOutput) -> bool:
@@ -140,4 +151,11 @@ def _city(value: str) -> str | None:
     return match.group(1).removesuffix("市") if match else None
 
 
-__all__ = ["FieldPilotMissionInterpreter", "InterpreterRun", "PROMPT_VERSION", "complete_clarifications", "is_ready"]
+__all__ = [
+    "FieldPilotMissionInterpreter",
+    "InterpreterRun",
+    "PROMPT_VERSION",
+    "complete_clarifications",
+    "finalize_output",
+    "is_ready",
+]

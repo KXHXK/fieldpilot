@@ -27,7 +27,7 @@ const timeline = {
 const currentTimeline = computed(() => timeline[revision.value]);
 
 const evidence = [
-  ["46 passed", "后端全量回归"],
+  ["47 passed", "后端全量回归"],
   ["0004", "Alembic 最新迁移"],
   ["V2", "执行检查点"],
   ["6 / 11", "变化段 / 保持段"]
@@ -177,7 +177,7 @@ const stack = [
       </div>
     </section>
 
-    <footer class="showcase-footer"><span>FieldPilot · 0.4.0-dev</span><b>EXPLAINABLE · REPLANNABLE · AUDITABLE</b><span>2026</span></footer>
+    <footer class="showcase-footer"><span>FieldPilot · 0.5.0-dev</span><b>EXPLAINABLE · REPLANNABLE · AUDITABLE</b><span>2026</span></footer>
   </main>
 </template>
 

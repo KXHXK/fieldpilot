@@ -9,5 +9,6 @@ __pycache__/
 *.db-wal
 node_modules/
 dist/
+backend/artifacts/
 .netlify/
 .DS_Store

@@ -4,7 +4,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 **在线专题：** [fieldpilot-kxh.netlify.app](https://fieldpilot-kxh.netlify.app/) · **源代码：** [github.com/KXHXK/fieldpilot](https://github.com/KXHXK/fieldpilot)
 
-当前开发版本是可本地运行的 `0.4.0-dev`。PydanticAI 单 Agent 只负责自然语言到严格 MissionDraft 的转换；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
+当前开发版本是 `0.5.0-dev`。PydanticAI 单 Agent 只负责自然语言到严格 MissionDraft 的转换；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
@@ -42,20 +42,20 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 | 能力 | 当前状态 | 验收边界 |
 | --- | --- | --- |
 | FastAPI + Pydantic 数据契约 | 已实现并测试 | 结构化 API 可复现 |
-| PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback 和 TestModel 测试；真实模型未复验 | 只验收类型化语义入口，不声称真实模型质量 |
+| PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback、TestModel 测试与 15 场景真实模型评测工作流；真实运行等待工作流凭证环境 | fallback 不计入真实模型指标，失败时工作流失败 |
 | 高德 v5 市内路线适配 | 已进入规划链路并完成 MockTransport 契约/故障测试；真实密钥未复验 | 已验证适配与降级，未验证实时服务可用性 |
 | 高德 v5 周边餐饮 POI | 已实现预算过滤、缓存、失败降级和来源快照；真实密钥未复验 | 无人均消费字段的 POI 不进入方案，Fixture 不冒充实时报价 |
 | Vue v1 任务、方案、来源与重规划工作台 | 已实现并完成生产构建 | 本地真实浏览器链路已验收 |
 | Mission、政策快照与计划修订持久化 | 已实现并测试 | SQLite 已验证，PostgreSQL 容器尚未实跑 |
 | 有限搜索 Planner + Policy Engine + 独立 Verifier | 已实现；跨城、酒店和无 Key 餐饮使用明确 Fixture | 确定性规划可复现，数据模式必须随 segment 传递 |
 | 计划请求幂等、revision 冲突与激活 | 已实现并测试 | 并发与重放路径已有接口测试 |
-| AgentRun 审计、幂等与固定集 | 已实现输入指纹、trace 查询和 5 场景 Mock 基线 | Mock 指标不能替代真实模型指标 |
+| AgentRun 审计、幂等与固定集 | 已实现输入指纹、trace 查询、5 场景 Mock 基线与独立 15 场景 live 固定集 | Mock 与 live 指标、数据集和报告分离 |
 | ReplanEvent 事实应用与 Revision Diff | 已实现并测试；外部风险信号仅 recorded_only | 不声称所有中断已自动处置 |
 | ExecutionCheckpoint 与严格后缀重规划 | 已实现命令幂等、版本冲突、单调锁定/完成和前缀逐段一致性校验 | 只重算检查点后的可变后缀；有界搜索不声称全局最优 |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 当前业务不需要 |
 | RAG、审批流、SSE、全局路线最优化 | 未实现 | 不属于当前已验收能力 |
 | 独立公网静态专题页 | 已部署并完成 HTTP/CDN 验证 | 独立 URL，只展示经验证的架构、流程与边界，不连接可写后端 |
-| FastAPI/PostgreSQL 公网服务 | 未部署 | 完整交互工作台仍需本地启动，不将静态展示冒充在线业务系统 |
+| FastAPI/PostgreSQL 公网服务 | 已提供 Render Blueprint、Neon URL 兼容和生产 CORS 配置；等待平台账号授权后部署 | 未取得公网 health/ready 与持久化证据前仍标记为未上线 |
 
 ## 公网静态专题
 
@@ -108,7 +108,6 @@ docker compose up --build
 密钥只放在 `backend/.env` 或云平台环境变量中：
 
 ```env
-USE_MOCK_TOOLS=false
 USE_MOCK_LLM=false
 AMAP_API_KEY=
 LOCAL_ROUTE_PROVIDER=amap
@@ -116,7 +115,6 @@ PROVIDER_TIMEOUT_SECONDS=3.0
 PROVIDER_MAX_RETRIES=1
 PROVIDER_MAX_CONCURRENCY=4
 PROVIDER_MAX_LIVE_CALLS=32
-TAVILY_API_KEY=
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.moonshot.cn/v1
 MODEL_NAME=kimi-k2.6
@@ -141,7 +139,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前结果（2026-07-31）：后端 `46 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；完整工作台与静态专题两种前端生产构建成功；本地运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀；公网专题的 HTTPS、SPA 回退、指纹资源与安全响应头通过检查。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-07-31）：后端 `47 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；完整工作台与静态专题两种前端生产构建成功；本地运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀；公网专题的 HTTPS、SPA 回退、指纹资源与安全响应头通过检查。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 
@@ -164,5 +162,7 @@ FieldPilot 的早期工程基础来自本人此前完成并部署的“智能旅
 - [企业级目标设计（Target v1.0）](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)
 - [开发日志](docs/development-log.md)
 - [Mission Interpret v1 Mock 基线报告](docs/evals/mission-interpret-v1-baseline.md)
+- [Mission Interpret v1 Live 评测说明](docs/evals/mission-interpret-live-v1-pending.md)
+- [零成本公网部署方案](docs/deployment-free-tier.md)
 - [五分钟演示与面试讲解](docs/demo-guide.md)
 - [发布验收清单](docs/release-readiness.md)

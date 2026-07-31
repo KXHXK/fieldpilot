@@ -1,5 +1,5 @@
-from app.services.amap_target_service import AmapTargetService
-from app.services.llm_service import SummaryService
-from app.services.weather_service import WeatherRiskService
+"""FieldPilot application services.
 
-__all__ = ["AmapTargetService", "SummaryService", "WeatherRiskService"]
+Services are imported from their owning modules so the package does not expose
+the removed v0 coordinator facade.
+"""
