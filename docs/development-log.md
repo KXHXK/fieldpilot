@@ -315,10 +315,12 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 增加 PostgreSQL URL 归一化，将 Neon 常见 `postgresql://...?sslmode=require&channel_binding=require` 转为 SQLAlchemy asyncpg 可用的 `postgresql+asyncpg://...?ssl=require`，并用单元测试固定契约。
 - 删除早期 `/api/field-task/plan`、自由多 Agent、旧 schemas/services 和未被 v1 工作台引用的前端组件；旧路由由 404 回归测试守住，不再同时维护两套领域语义。
 - 真实模型评测扩为独立 `mission-interpret-live-v1` 15 场景数据集，默认每例重复三次，记录 live completion、精确率、稳定率、P50/P95 延迟与 Token；只有 `AgentMode.LIVE` 进入模型指标，fallback 使流程失败。
-- 新增 GitHub Actions 手动评测，使用临时 `GITHUB_TOKEN` 的 `models: read` 权限调用 GitHub Models，并按免费层速率在调用间节流；报告以 artifact 保存，不提交密钥或原始文本。
+- 新增 GitHub Actions 手动评测，通过仓库 secret/variables 注入 OpenAI-compatible 供应商配置，并按免费/试用层速率在调用间节流；报告以 artifact 保存，不提交密钥或原始文本。
 - 明确 Agent 的上下文与工具边界：模型只做类型化语义转换且工具数为零；持久 Mission/Revision/Event/Checkpoint 承担长期上下文，应用服务在用户确认后调用受治理 Provider。当前不引入 MCP，等能力确实需要跨客户端复用时再增加只读 server。
 
 ### 当前阻塞
 
 - 本机没有 Render/Neon 账号授权，因而尚无公网 API URL、云端 migration 或重启后持久化证据。
-- 本机 GitHub OAuth token 没有 `models` scope；真实模型运行需在变更进入远端分支后触发仓库工作流。
+- 首轮 GitHub Models run `30641667031` 的 15 次调用全部安全降级，诊断 run `30642038742` 确认 HTTP 410 `github_models_retirement_brownout`；官方已于 2026-07-30 退役该服务，因此工作流不再依赖它。
+- Netlify AI Gateway 本地最小调用返回 HTTP 403 `mismatched_client_ip`；生产调用会消耗当前已耗尽的 Netlify credits，没有继续尝试。
+- 真实模型报告仍需在仓库中配置独立 `FIELD_PILOT_LLM_API_KEY` 后运行；在成功 run 前指标保持空缺。
