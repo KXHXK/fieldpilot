@@ -75,4 +75,4 @@ SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、P
 
 ## 8. 交付边界
 
-本地已验证 SQLite、47 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。独立 Netlify 静态专题已上线并完成 HTTPS、SPA 回退、CDN 资源与安全响应头验证；它不连接可写后端。仓库提供 PostgreSQL Compose、Nginx 反向代理、Render Blueprint、Neon URL 归一化、健康/就绪检查和 GitHub Actions；当前机器没有 Docker CLI，Render/Neon 也未授权，因此容器运行与公网后端仍是待验证项。
+本地已验证 SQLite、48 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。独立 Netlify 静态专题已上线并完成 HTTPS、SPA 回退、CDN 资源与安全响应头验证；它不连接可写后端。仓库提供 PostgreSQL Compose、Nginx 反向代理、Render Blueprint、Neon URL 归一化、健康/就绪检查和 GitHub Actions；Neon 数据库已创建，Render 公网容器仍在部署授权阶段。
