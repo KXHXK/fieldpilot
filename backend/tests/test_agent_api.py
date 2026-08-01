@@ -1,15 +1,22 @@
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 import httpx
 import pytest
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
 from app.agent import FieldPilotMissionInterpreter
+from app.agent.interpreter import complete_clarifications
 from app.config import Settings
 from app.domain import (
     AgentMissionOutput,
     ClarificationQuestion,
+    ExpensePolicyDraft,
     InterpretMissionRequest,
+    LocationDraft,
     MissionDraft,
+    VisitDraft,
 )
 from app.db import SessionFactory
 from app.db.models import AgentRunRecord
@@ -139,6 +146,38 @@ async def test_live_structured_output_recomputes_clarifications_from_typed_facts
 
     assert run.mode == "live"
     assert run.output.clarifications == []
+
+
+def test_policy_completeness_accepts_one_explicit_intercity_mode() -> None:
+    zone = ZoneInfo("Asia/Shanghai")
+    draft = MissionDraft(
+        origin=LocationDraft(name="虹桥机场", address="上海市长宁区虹桥路", city="上海"),
+        destination_city="北京",
+        start_date=date(2026, 8, 18),
+        end_date=date(2026, 8, 19),
+        visits=[
+            VisitDraft(
+                name="客户访谈",
+                address="北京市朝阳区建国路",
+                city="北京",
+                window_start=datetime(2026, 8, 18, 14, 0, tzinfo=zone),
+                window_end=datetime(2026, 8, 18, 16, 0, tzinfo=zone),
+                duration_minutes=90,
+            )
+        ],
+        expense_policy=ExpensePolicyDraft(
+            allowed_rail_classes=None,
+            allowed_flight_classes=["economy"],
+            hotel_nightly_cap_yuan=650,
+            meal_daily_cap_yuan=150,
+            local_transport_daily_cap_yuan=300,
+            trip_total_cap_yuan=4200,
+        ),
+        preferred_intercity_modes=["flight"],
+    )
+    output = AgentMissionOutput(draft=draft, confidence=0.9)
+
+    assert complete_clarifications(output).clarifications == []
 
 
 def test_kimi_k26_disables_thinking_for_required_structured_output() -> None:
