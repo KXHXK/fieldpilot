@@ -139,7 +139,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前结果（2026-07-31）：后端 `47 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；完整工作台与静态专题两种前端生产构建成功；本地运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀；公网专题的 HTTPS、SPA 回退、指纹资源与安全响应头通过检查。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-08-01）：后端 `48 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；完整工作台与静态专题两种前端生产构建成功；本地运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀；公网专题的 HTTPS、SPA 回退、指纹资源与安全响应头通过检查。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 

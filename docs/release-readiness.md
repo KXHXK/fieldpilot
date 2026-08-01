@@ -10,7 +10,7 @@
 
 - [x] 无 `.env`、Key、依赖目录或构建目录进入 Git。
 - [x] SQLite + Alembic `20260731_0004` 升降级和 schema check。
-- [x] 47 项 Pytest，包含执行检查点单调推进/幂等/并发冲突、严格前缀保留、Verifier 篡改拦截、Neon URL 归一化，以及自然语言到事件式 R2 的 API E2E。
+- [x] 48 项 Pytest，包含执行检查点单调推进/幂等/并发冲突、严格前缀保留、Verifier 篡改拦截、Neon URL 归一化、Kimi K2.6 非思考结构化输出设置，以及自然语言到事件式 R2 的 API E2E。
 - [x] 删除旧 `/api/field-task/plan`、旧多 Agent、旧模型/服务和未使用前端组件；回归测试固定旧接口返回 404。
 - [x] 15 场景独立 live 数据集、三次重复、延迟/Token/稳定率指标及 OpenAI-compatible 手动工作流；fallback 不进入 live 得分。
 - [x] 时间线生成工作点/酒店附近餐次，按自然日核算餐补；候选、失败原因和来源写入 ProviderSnapshot。

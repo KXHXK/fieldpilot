@@ -100,6 +100,22 @@ async def test_live_structured_output_gets_deterministic_safety_postcheck() -> N
     assert run.output.safety_flags == ["prompt_injection_like_text"]
 
 
+def test_kimi_k26_disables_thinking_for_required_structured_output() -> None:
+    interpreter = FieldPilotMissionInterpreter(
+        Settings(
+            use_mock_llm=False,
+            openai_api_key="test-only",
+            openai_base_url="https://api.moonshot.cn/v1",
+            model_name="kimi-k2.6",
+            _env_file=None,
+        )
+    )
+
+    assert interpreter._model_settings() == {
+        "extra_body": {"thinking": {"type": "disabled"}}
+    }
+
+
 @pytest.mark.asyncio
 async def test_live_mode_missing_key_falls_back_honestly() -> None:
     interpreter = FieldPilotMissionInterpreter(

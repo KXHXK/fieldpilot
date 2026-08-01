@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from openai import AsyncOpenAI
 from pydantic_ai import Agent, UsageLimits
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import Settings
@@ -54,6 +54,7 @@ class FieldPilotMissionInterpreter:
         try:
             result = await self._agent().run(
                 json.dumps({"reference_date": command.reference_date.isoformat(), "timezone": command.timezone, "user_text": command.text}, ensure_ascii=False),
+                model_settings=self._model_settings(),
                 usage_limits=UsageLimits(request_limit=2, total_tokens_limit=self.settings.llm_total_tokens_limit),
             )
             usage = result.usage
@@ -80,6 +81,17 @@ class FieldPilotMissionInterpreter:
             model = OpenAIChatModel(self.settings.model_name, provider=OpenAIProvider(openai_client=client))
         return Agent(model, output_type=AgentMissionOutput, instructions=INSTRUCTIONS,
                      retries=1, tools=(), name="fieldpilot_mission_interpreter")
+
+    def _model_settings(self) -> OpenAIChatModelSettings | None:
+        """Apply provider-specific request settings required by the typed output path."""
+        if (
+            "moonshot.cn" in self.settings.openai_base_url
+            and self.settings.model_name in {"kimi-k2.5", "kimi-k2.6"}
+        ):
+            return OpenAIChatModelSettings(
+                extra_body={"thinking": {"type": "disabled"}}
+            )
+        return None
 
     def _mock(self, command: InterpretMissionRequest, mode: AgentMode,
               failure: str | None = None, started: float | None = None,

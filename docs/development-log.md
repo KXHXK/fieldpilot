@@ -324,3 +324,10 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 首轮 GitHub Models run `30641667031` 的 15 次调用全部安全降级，诊断 run `30642038742` 确认 HTTP 410 `github_models_retirement_brownout`；官方已于 2026-07-30 退役该服务，因此工作流不再依赖它。
 - Netlify AI Gateway 本地最小调用返回 HTTP 403 `mismatched_client_ip`；生产调用会消耗当前已耗尽的 Netlify credits，没有继续尝试。
 - 真实模型报告仍需在仓库中配置独立 `FIELD_PILOT_LLM_API_KEY` 后运行；在成功 run 前指标保持空缺。
+
+## 2026-08-01｜Stage 12：Neon 落地与 Kimi 真实评测兼容
+
+- Neon CLI OAuth 完成，复用当日创建的免费项目并重命名为 `fieldpilot`，在 production branch 新建独立 `fieldpilot` 数据库；连接凭证不进入仓库或日志。
+- GitHub Actions 已确认 `FIELD_PILOT_LLM_API_KEY`、`FIELD_PILOT_LLM_BASE_URL` 和 `FIELD_PILOT_LLM_MODEL` 配置存在。
+- 首个 Kimi K2.6 live 场景到达真实供应商，但返回 HTTP 400：thinking 模式与 PydanticAI 类型化输出使用的 `tool_choice=required` 不兼容。
+- 按 Moonshot 官方契约，仅对 `api.moonshot.cn` 的 `kimi-k2.5/kimi-k2.6` 请求增加 `thinking.type=disabled`；其他 OpenAI-compatible 供应商不受影响，并新增回归测试。
