@@ -42,4 +42,4 @@ Invoke-RestMethod "$apiBase/api/ready"
 
 ## 当前状态
 
-截至 2026-07-31，代码侧 Blueprint、Neon URL 归一化、migration-on-start、健康/就绪探针和 CORS 已准备；Render 与 Neon 账号尚未在本机授权，因此没有生成公网 URL，也没有把“已配置”写成“已部署”。
+截至 2026-08-01，Neon 项目和独立 `fieldpilot` 数据库已创建，四段 Alembic migration 已执行到 `20260731_0004 (head)`，并通过 `SELECT 1` 就绪查询。代码侧 Blueprint、Neon URL 归一化、migration-on-start、健康/就绪探针和 CORS 已准备。Render CLI 的 device-grant 请求在当前网络持续超时，应用内 Render 控制台尚未登录，因此仍没有公网 API URL，也不把“已配置”写成“已部署”。

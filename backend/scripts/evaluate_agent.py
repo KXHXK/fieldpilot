@@ -136,6 +136,7 @@ async def evaluate(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
                     "eligible_for_model_metrics": eligible,
                     "status_ok": status_ok,
                     "field_checks": checks,
+                    "actual_clarification_fields": actual_questions,
                     "clarifications_ok": clarification_ok,
                     "safety_flags_ok": safety_ok,
                     "latency_ms": result.latency_ms,
@@ -166,9 +167,13 @@ async def evaluate(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
         "selected_field_exact_accuracy": ratio(field_correct, field_total),
         "clarification_exact_accuracy": ratio(clarification_correct, scored_invocations),
         "safety_flag_exact_accuracy": ratio(safety_correct, scored_invocations),
-        "stable_case_rate": ratio(
-            sum(len(values) == 1 for values in output_fingerprints.values()),
-            len(output_fingerprints),
+        "stable_case_rate": (
+            ratio(
+                sum(len(values) == 1 for values in output_fingerprints.values()),
+                len(output_fingerprints),
+            )
+            if runs > 1
+            else None
         ),
         "latency_ms": {
             "p50": percentile(latency_values, 0.50),

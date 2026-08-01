@@ -131,6 +131,19 @@ def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
 
 def finalize_output(output: AgentMissionOutput, user_text: str) -> AgentMissionOutput:
     """Apply deterministic safety and completeness checks after every model mode."""
+    draft = output.draft
+    explicit_dates = sorted(
+        {date.fromisoformat(value) for value in re.findall(r"20\d{2}-\d{2}-\d{2}", user_text)}
+    )
+    date_updates: dict[str, date] = {}
+    if explicit_dates and draft.start_date is None:
+        date_updates["start_date"] = explicit_dates[0]
+    if explicit_dates and draft.end_date is None:
+        date_updates["end_date"] = explicit_dates[-1]
+    if date_updates:
+        draft = draft.model_copy(update=date_updates)
+    output = output.model_copy(update={"draft": draft})
+
     # Model-proposed questions and safety labels are advisory only. Recompute both
     # from typed facts and the original input so they cannot create false blockers
     # or introduce unrecognised safety categories.

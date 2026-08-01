@@ -318,7 +318,7 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 新增 GitHub Actions 手动评测，通过仓库 secret/variables 注入 OpenAI-compatible 供应商配置，并按免费/试用层速率在调用间节流；报告以 artifact 保存，不提交密钥或原始文本。
 - 明确 Agent 的上下文与工具边界：模型只做类型化语义转换且工具数为零；持久 Mission/Revision/Event/Checkpoint 承担长期上下文，应用服务在用户确认后调用受治理 Provider。当前不引入 MCP，等能力确实需要跨客户端复用时再增加只读 server。
 
-### 当前阻塞
+### 当时阻塞（已由 Stage 12/13 更新）
 
 - 本机没有 Render/Neon 账号授权，因而尚无公网 API URL、云端 migration 或重启后持久化证据。
 - 首轮 GitHub Models run `30641667031` 的 15 次调用全部安全降级，诊断 run `30642038742` 确认 HTTP 410 `github_models_retirement_brownout`；官方已于 2026-07-30 退役该服务，因此工作流不再依赖它。
@@ -331,3 +331,13 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - GitHub Actions 已确认 `FIELD_PILOT_LLM_API_KEY`、`FIELD_PILOT_LLM_BASE_URL` 和 `FIELD_PILOT_LLM_MODEL` 配置存在。
 - 首个 Kimi K2.6 live 场景到达真实供应商，但返回 HTTP 400：thinking 模式与 PydanticAI 类型化输出使用的 `tool_choice=required` 不兼容。
 - 按 Moonshot 官方契约，仅对 `api.moonshot.cn` 的 `kimi-k2.5/kimi-k2.6` 请求增加 `thinking.type=disabled`；其他 OpenAI-compatible 供应商不受影响，并新增回归测试。
+
+## 2026-08-01｜Stage 13：真实 Eval 驱动的 Agent 护栏收敛
+
+- 合并 Kimi 非思考结构化输出修复后，`main` 上 15 场景真实基线全部进入 live，无 fallback；但状态准确率 53.33%、澄清字段精确率 0%、安全标签精确率 86.67%，暴露出模型会自行增加无依据的澄清项和标签。
+- 将模型输出中的澄清与安全标签视为 advisory，统一由确定性后处理根据 typed draft 与原始输入重算；第二轮 live 将状态提升至 93.33%、字段提升至 100%、澄清提升至 86.67%、安全提升至 100%。
+- 第二轮进一步暴露报销完整性规则错误地要求铁路和航班等级同时出现。改为任一跨城方式有明确等级即可后，最终 15 场景 run `30687086569` 达到 15/15 live、状态 100%、字段 94.87%、澄清 93.33%、安全 100%，P50/P95 为 16.91/26.92 秒，总 Token 22,788。
+- 最终轮次仍发现模型对两个城市字段随机漏抽，以及单日期一日行程可能只填开始日。前两项如实保留为模型边界；后一项通过从用户原文提取显式日期边界做确定性归一化，并新增回归测试，没有继续消耗真实模型额度追求表面满分。
+- 评测器在每例仅一次调用时将稳定率记为 `null`，避免把单样本恒等误写为 100% 稳定；artifact 新增实际澄清字段名，仍不保存用户原文或模型自由文本。
+- Neon `fieldpilot` 数据库完成四段 Alembic migration，`alembic current` 为 `20260731_0004 (head)`，并通过独立 `SELECT 1` 就绪查询。连接凭证只在进程环境中短暂使用，未写入仓库或日志。
+- 后端全量回归为 `51 passed`。Render CLI 到 `api.render.com` 的 device-grant 请求持续网络超时，应用内控制台又处于未登录状态，因此公网容器发布仍等待一次人工登录授权。

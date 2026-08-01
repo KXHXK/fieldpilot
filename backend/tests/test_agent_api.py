@@ -148,6 +148,32 @@ async def test_live_structured_output_recomputes_clarifications_from_typed_facts
     assert run.output.clarifications == []
 
 
+@pytest.mark.asyncio
+async def test_live_structured_output_normalizes_single_day_date() -> None:
+    command = InterpretMissionRequest(
+        request_id="agent-test-single-day-001",
+        text=COMPLETE_TEXT,
+        reference_date="2026-07-30",
+    )
+    fixture_run = await FieldPilotMissionInterpreter(
+        Settings(use_mock_llm=True, _env_file=None)
+    ).interpret(command)
+    single_day_draft = fixture_run.output.draft.model_copy(
+        update={"end_date": None}
+    )
+    model_output = fixture_run.output.model_copy(update={"draft": single_day_draft})
+    interpreter = FieldPilotMissionInterpreter(
+        Settings(use_mock_llm=False, openai_api_key="", _env_file=None),
+        model=TestModel(custom_output_args=model_output.model_dump(mode="json")),
+    )
+
+    run = await interpreter.interpret(command)
+
+    assert run.output.draft.start_date == date(2026, 8, 6)
+    assert run.output.draft.end_date == date(2026, 8, 7)
+    assert run.output.clarifications == []
+
+
 def test_policy_completeness_accepts_one_explicit_intercity_mode() -> None:
     zone = ZoneInfo("Asia/Shanghai")
     draft = MissionDraft(
