@@ -27,7 +27,7 @@ const timeline = {
 const currentTimeline = computed(() => timeline[revision.value]);
 
 const evidence = [
-  ["48 passed", "后端全量回归"],
+  ["51 passed", "后端全量回归"],
   ["0004", "Alembic 最新迁移"],
   ["V2", "执行检查点"],
   ["6 / 11", "变化段 / 保持段"]

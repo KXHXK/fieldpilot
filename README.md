@@ -139,7 +139,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前结果（2026-08-01）：后端 `48 passed`；Alembic `upgrade head / check / downgrade 20260730_0003 / upgrade head` 通过；完整工作台与静态专题两种前端生产构建成功；本地运行中 HTTP 冒烟与真实浏览器主链路通过，执行检查点从 V0 推进至 V2，R2 严格保留受保护前缀；公网专题的 HTTPS、SPA 回退、指纹资源与安全响应头通过检查。Docker CLI 未安装，因此容器构建未验证。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-08-01）：后端 `51 passed`；Neon PostgreSQL 已执行 Alembic 至 `20260731_0004 (head)` 并通过就绪查询；完整工作台与静态专题两种前端生产构建成功；Kimi K2.6 的 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%。本地 HTTP 冒烟、真实浏览器主链路和公网专题 HTTP/CDN 检查通过。Docker CLI 未安装，Render 公网容器仍等待控制台授权，因此不声称后端已上线。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 
@@ -162,7 +162,7 @@ FieldPilot 的早期工程基础来自本人此前完成并部署的“智能旅
 - [企业级目标设计（Target v1.0）](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)
 - [开发日志](docs/development-log.md)
 - [Mission Interpret v1 Mock 基线报告](docs/evals/mission-interpret-v1-baseline.md)
-- [Mission Interpret v1 Live 评测说明](docs/evals/mission-interpret-live-v1-pending.md)
+- [Mission Interpret v1 Live 真实模型评测报告](docs/evals/mission-interpret-live-v1-report.md)
 - [零成本公网部署方案](docs/deployment-free-tier.md)
 - [五分钟演示与面试讲解](docs/demo-guide.md)
 - [发布验收清单](docs/release-readiness.md)

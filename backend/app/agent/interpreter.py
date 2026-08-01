@@ -105,8 +105,8 @@ class FieldPilotMissionInterpreter:
 
 
 def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
-    d, questions = output.draft, list(output.clarifications)
-    fields = {q.field for q in questions}
+    d, questions = output.draft, []
+    fields: set[str] = set()
     def add(field: str, question: str, reason: str) -> None:
         if field not in fields and len(questions) < 3:
             questions.append(ClarificationQuestion(field=field, question=question, reason=reason)); fields.add(field)
@@ -115,15 +115,39 @@ def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
     if not d.visits or not all(all([v.name, v.address, v.city, v.window_start, v.window_end, v.duration_minutes]) for v in d.visits):
         add("visits", "请逐项补充工作地点、时间窗和持续时间。", "Planner 只处理明确任务时窗。")
     p = d.expense_policy
-    if not all(v is not None for v in [p.allowed_rail_classes, p.allowed_flight_classes, p.hotel_nightly_cap_yuan,
-                                        p.meal_daily_cap_yuan, p.local_transport_daily_cap_yuan, p.trip_total_cap_yuan]):
+    transport_policy_provided = (
+        p.allowed_rail_classes is not None or p.allowed_flight_classes is not None
+    )
+    numeric_caps = [
+        p.hotel_nightly_cap_yuan,
+        p.meal_daily_cap_yuan,
+        p.local_transport_daily_cap_yuan,
+        p.trip_total_cap_yuan,
+    ]
+    if not transport_policy_provided or not all(value is not None for value in numeric_caps):
         add("expense_policy", "请补充交通等级及住宿、餐饮、市内交通和总预算。", "缺少报销边界不能判断合规。")
     return output.model_copy(update={"clarifications": questions})
 
 
 def finalize_output(output: AgentMissionOutput, user_text: str) -> AgentMissionOutput:
     """Apply deterministic safety and completeness checks after every model mode."""
-    flags = list(output.safety_flags)
+    draft = output.draft
+    explicit_dates = sorted(
+        {date.fromisoformat(value) for value in re.findall(r"20\d{2}-\d{2}-\d{2}", user_text)}
+    )
+    date_updates: dict[str, date] = {}
+    if explicit_dates and draft.start_date is None:
+        date_updates["start_date"] = explicit_dates[0]
+    if explicit_dates and draft.end_date is None:
+        date_updates["end_date"] = explicit_dates[-1]
+    if date_updates:
+        draft = draft.model_copy(update=date_updates)
+    output = output.model_copy(update={"draft": draft})
+
+    # Model-proposed questions and safety labels are advisory only. Recompute both
+    # from typed facts and the original input so they cannot create false blockers
+    # or introduce unrecognised safety categories.
+    flags: list[str] = []
     if (
         re.search(r"忽略.{0,12}(系统|规则|指令)|访问文件|执行命令|泄露", user_text, re.I)
         and "prompt_injection_like_text" not in flags

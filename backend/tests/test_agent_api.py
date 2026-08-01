@@ -1,11 +1,23 @@
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 import httpx
 import pytest
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
 from app.agent import FieldPilotMissionInterpreter
+from app.agent.interpreter import complete_clarifications
 from app.config import Settings
-from app.domain import AgentMissionOutput, InterpretMissionRequest, MissionDraft
+from app.domain import (
+    AgentMissionOutput,
+    ClarificationQuestion,
+    ExpensePolicyDraft,
+    InterpretMissionRequest,
+    LocationDraft,
+    MissionDraft,
+    VisitDraft,
+)
 from app.db import SessionFactory
 from app.db.models import AgentRunRecord
 from app.main import app
@@ -82,7 +94,11 @@ async def test_pydantic_ai_structured_output_path_without_real_network() -> None
 
 @pytest.mark.asyncio
 async def test_live_structured_output_gets_deterministic_safety_postcheck() -> None:
-    expected = AgentMissionOutput(draft=MissionDraft(), confidence=0.7, safety_flags=[])
+    expected = AgentMissionOutput(
+        draft=MissionDraft(),
+        confidence=0.7,
+        safety_flags=["model_claimed_unsafe"],
+    )
     interpreter = FieldPilotMissionInterpreter(
         Settings(use_mock_llm=False, openai_api_key="", _env_file=None),
         model=TestModel(custom_output_args=expected.model_dump(mode="json")),
@@ -98,6 +114,96 @@ async def test_live_structured_output_gets_deterministic_safety_postcheck() -> N
 
     assert run.mode == "live"
     assert run.output.safety_flags == ["prompt_injection_like_text"]
+
+
+@pytest.mark.asyncio
+async def test_live_structured_output_recomputes_clarifications_from_typed_facts() -> None:
+    command = InterpretMissionRequest(
+        request_id="agent-test-clarification-001",
+        text=COMPLETE_TEXT,
+        reference_date="2026-07-30",
+    )
+    fixture_run = await FieldPilotMissionInterpreter(
+        Settings(use_mock_llm=True, _env_file=None)
+    ).interpret(command)
+    model_output = fixture_run.output.model_copy(
+        update={
+            "clarifications": [
+                ClarificationQuestion(
+                    field="route_basics",
+                    question="请重复已经提供的路线信息。",
+                    reason="模型误判。",
+                )
+            ]
+        }
+    )
+    interpreter = FieldPilotMissionInterpreter(
+        Settings(use_mock_llm=False, openai_api_key="", _env_file=None),
+        model=TestModel(custom_output_args=model_output.model_dump(mode="json")),
+    )
+
+    run = await interpreter.interpret(command)
+
+    assert run.mode == "live"
+    assert run.output.clarifications == []
+
+
+@pytest.mark.asyncio
+async def test_live_structured_output_normalizes_single_day_date() -> None:
+    command = InterpretMissionRequest(
+        request_id="agent-test-single-day-001",
+        text=COMPLETE_TEXT,
+        reference_date="2026-07-30",
+    )
+    fixture_run = await FieldPilotMissionInterpreter(
+        Settings(use_mock_llm=True, _env_file=None)
+    ).interpret(command)
+    single_day_draft = fixture_run.output.draft.model_copy(
+        update={"end_date": None}
+    )
+    model_output = fixture_run.output.model_copy(update={"draft": single_day_draft})
+    interpreter = FieldPilotMissionInterpreter(
+        Settings(use_mock_llm=False, openai_api_key="", _env_file=None),
+        model=TestModel(custom_output_args=model_output.model_dump(mode="json")),
+    )
+
+    run = await interpreter.interpret(command)
+
+    assert run.output.draft.start_date == date(2026, 8, 6)
+    assert run.output.draft.end_date == date(2026, 8, 7)
+    assert run.output.clarifications == []
+
+
+def test_policy_completeness_accepts_one_explicit_intercity_mode() -> None:
+    zone = ZoneInfo("Asia/Shanghai")
+    draft = MissionDraft(
+        origin=LocationDraft(name="虹桥机场", address="上海市长宁区虹桥路", city="上海"),
+        destination_city="北京",
+        start_date=date(2026, 8, 18),
+        end_date=date(2026, 8, 19),
+        visits=[
+            VisitDraft(
+                name="客户访谈",
+                address="北京市朝阳区建国路",
+                city="北京",
+                window_start=datetime(2026, 8, 18, 14, 0, tzinfo=zone),
+                window_end=datetime(2026, 8, 18, 16, 0, tzinfo=zone),
+                duration_minutes=90,
+            )
+        ],
+        expense_policy=ExpensePolicyDraft(
+            allowed_rail_classes=None,
+            allowed_flight_classes=["economy"],
+            hotel_nightly_cap_yuan=650,
+            meal_daily_cap_yuan=150,
+            local_transport_daily_cap_yuan=300,
+            trip_total_cap_yuan=4200,
+        ),
+        preferred_intercity_modes=["flight"],
+    )
+    output = AgentMissionOutput(draft=draft, confidence=0.9)
+
+    assert complete_clarifications(output).clarifications == []
 
 
 def test_kimi_k26_disables_thinking_for_required_structured_output() -> None:
