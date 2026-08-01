@@ -105,8 +105,8 @@ class FieldPilotMissionInterpreter:
 
 
 def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
-    d, questions = output.draft, list(output.clarifications)
-    fields = {q.field for q in questions}
+    d, questions = output.draft, []
+    fields: set[str] = set()
     def add(field: str, question: str, reason: str) -> None:
         if field not in fields and len(questions) < 3:
             questions.append(ClarificationQuestion(field=field, question=question, reason=reason)); fields.add(field)
@@ -123,7 +123,10 @@ def complete_clarifications(output: AgentMissionOutput) -> AgentMissionOutput:
 
 def finalize_output(output: AgentMissionOutput, user_text: str) -> AgentMissionOutput:
     """Apply deterministic safety and completeness checks after every model mode."""
-    flags = list(output.safety_flags)
+    # Model-proposed questions and safety labels are advisory only. Recompute both
+    # from typed facts and the original input so they cannot create false blockers
+    # or introduce unrecognised safety categories.
+    flags: list[str] = []
     if (
         re.search(r"忽略.{0,12}(系统|规则|指令)|访问文件|执行命令|泄露", user_text, re.I)
         and "prompt_injection_like_text" not in flags
