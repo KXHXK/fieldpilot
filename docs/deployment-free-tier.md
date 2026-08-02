@@ -3,8 +3,8 @@
 ## 目标拓扑
 
 ```text
-Netlify 静态专题  ->  Render FastAPI  ->  Neon PostgreSQL
-fieldpilot-kxh        fieldpilot-api       fieldpilot database
+Netlify 项目站 + 工作台  ->  Render FastAPI  ->  Neon PostgreSQL
+fieldpilot-kxh             fieldpilot-api       fieldpilot database
 ```
 
 仓库根目录的 `render.yaml` 固定 Singapore、Docker runtime、`/api/ready` 健康检查、生产 CORS 和无密钥 Fixture 模式。`DATABASE_URL` 标记为 `sync: false`，只能在 Render 控制台录入，不能提交到 Git。
@@ -42,4 +42,14 @@ Invoke-RestMethod "$apiBase/api/ready"
 
 ## 当前状态
 
-截至 2026-08-01，Neon 项目和独立 `fieldpilot` 数据库已创建，四段 Alembic migration 已执行到 `20260731_0004 (head)`，并通过 `SELECT 1` 就绪查询。代码侧 Blueprint、Neon URL 归一化、migration-on-start、健康/就绪探针和 CORS 已准备。Render CLI 的 device-grant 请求在当前网络持续超时，应用内 Render 控制台尚未登录，因此仍没有公网 API URL，也不把“已配置”写成“已部署”。
+截至 2026-08-02，三层免费拓扑已上线：Netlify 项目站与工作台为 <https://fieldpilot-kxh.netlify.app/> 和 `/workbench`，Render API 为 <https://fieldpilot-api-t7m6.onrender.com>，数据进入 Neon `fieldpilot` PostgreSQL。初始生产容器部署 commit 为 `bc53426`，Netlify 生产 deploy 为 `6a6f13259646109fe6f02be6`。
+
+已取得的上线证据：
+
+- `/api/health` 与 `/api/ready` 均为 HTTPS 200，数据库状态为 reachable，公开环境明确返回 `agent_mode=mock`、`local_route_provider=fixture`。
+- 公网 smoke 完成 Mission → R1 → 激活 → 执行检查点 → 任务改期事件 → R2 → Diff，得到 `protected_prefix_unchanged=true`。
+- Render 手动重启后，既有 Mission 仍为 active、R1/R2 与执行检查点仍可读取，证明状态不依赖临时文件系统。
+- 生产 Netlify origin 获得精确 CORS 许可；随机 Deploy Preview origin 被拒绝。工作台真实浏览器显示 `API ok` 并完成杭州示例 Agent 解析。
+- 数据库 owner 凭证在发布后完成轮换，旧凭证失效；仓库、文档和命令输出均不记录连接串。
+
+免费层边界仍然存在：Render 空闲时可能冷启动；公开环境没有多租户认证和生产限流；高德真实 Key 未验收，铁路、航班与酒店仍是显式 Fixture。因此这是可交互工程演示环境，不承担真实预订或生产 SLA。

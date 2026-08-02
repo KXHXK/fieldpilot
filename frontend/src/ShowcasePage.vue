@@ -58,13 +58,14 @@ const stack = [
 
     <header id="top" class="showcase-hero">
       <div class="hero-copy">
-        <p class="eyebrow">FIELD MISSION ORCHESTRATION · STATIC SHOWCASE</p>
+        <p class="eyebrow">FIELD MISSION ORCHESTRATION · LIVE SYSTEM</p>
         <h1>把出差要求，<br /><em>变成可执行行程。</em></h1>
         <p class="hero-summary">
           FieldPilot 面向跨省市外勤场景，把地点、任务时间窗、紧密程度与报销规则转成可验证的交通、住宿、餐饮和多点任务方案；途中变化通过事件与执行检查点安全重规划。
         </p>
         <div class="hero-actions">
-          <a class="button primary" href="#flow">查看 90 秒链路</a>
+          <a class="button primary" href="/workbench">打开在线工作台</a>
+          <a class="button secondary" href="#flow">查看 90 秒链路</a>
           <a class="button secondary" href="https://github.com/KXHXK/fieldpilot/blob/main/docs/architecture.md" target="_blank" rel="noreferrer">阅读架构取舍</a>
         </div>
       </div>
@@ -78,7 +79,7 @@ const stack = [
           <div><dt>预算余量</dt><dd>¥890</dd></div>
           <div><dt>来源模式</dt><dd>fixture + manual</dd></div>
         </dl>
-        <small>公开页使用已验证的合成数据证据，不连接可写后端。</small>
+        <small>在线工作台连接 Render FastAPI 与 Neon PostgreSQL；外部库存仍使用明确标记的 Fixture 数据。</small>
       </aside>
     </header>
 
@@ -151,7 +152,8 @@ const stack = [
         <article><span>API & DATABASE</span><strong>幂等、版本冲突与迁移往返</strong><p>ExecutionCommand 保存命令指纹；expected_version 防止并发覆盖；Alembic 0004 可升级、检查和回退。</p></article>
         <article><span>PLANNING</span><strong>受保护前缀逐字段一致</strong><p>HTTP 冒烟输出 protected_prefix_unchanged=true；Verifier 测试覆盖删除、篡改和越界。</p></article>
         <article><span>FRONTEND</span><strong>真实浏览器主链路</strong><p>R1 → lock V1 → event → R2 → complete V2；已完成任务禁用，控制台无 warning/error。</p></article>
-        <article><span>DELIVERY</span><strong>GitHub main CI success</strong><p>后端 46 项测试、迁移 schema check 与 Vue TypeScript/Vite production build 均通过。</p></article>
+        <article><span>DELIVERY</span><strong>GitHub main CI success</strong><p>后端 51 项测试、迁移 schema check 与 Vue TypeScript/Vite production build 均通过。</p></article>
+        <article><span>PUBLIC RUNTIME</span><strong>Render + Neon 重启恢复通过</strong><p>公网 smoke 覆盖 R1、事件式 R2、执行检查点和严格前缀保留；服务重启后仍可读取 Mission、Revision 与 Event。</p></article>
       </div>
       <div class="evidence-actions">
         <a href="https://github.com/KXHXK/fieldpilot/blob/main/docs/development-log.md" target="_blank" rel="noreferrer">开发日志 ↗</a>
@@ -163,17 +165,21 @@ const stack = [
     <section id="boundary" class="showcase-section boundary-section">
       <div>
         <p class="kicker">HONEST BOUNDARY</p>
-        <h2>这是静态项目专题，<br />不是公开预订或写入服务。</h2>
+        <h2>可在线体验完整编排，<br />但不冒充真实预订平台。</h2>
       </div>
       <div class="boundary-copy">
-        <p>完整工作台在本地连接 FastAPI、SQLite/PostgreSQL 配置与显式 Mock/Fixture。公网页面只展示已验证的合成场景和工程证据，不暴露模型、地图或数据库凭据。</p>
+        <p>公开工作台连接 FastAPI 与 PostgreSQL，可实际写入任务、生成修订、推进检查点并触发事件式重规划。演示环境不暴露模型、地图或数据库凭据，外部事实来源会在页面逐段标记。</p>
         <ul>
           <li><b>已实现：</b>高德路线/餐饮适配契约、降级、缓存与来源快照。</li>
           <li><b>当前 Fixture：</b>铁路、航班、酒店库存和价格，不抓取 12306 内部接口。</li>
-          <li><b>尚未验证：</b>真实高德/LLM Key、Docker/PostgreSQL 公网运行与生产级限流。</li>
+          <li><b>公网已验证：</b>Docker/FastAPI、Neon PostgreSQL、CORS、完整 smoke 与重启后持久化。</li>
+          <li><b>仍未验证：</b>真实高德 Key、生产限流和多租户身份隔离；公开环境使用 Mock LLM 与 Fixture Provider。</li>
           <li><b>算法口径：</b>有界 Beam Search 可解释、可复现，但不声称全局最优。</li>
         </ul>
-        <a class="button primary" href="https://github.com/KXHXK/fieldpilot" target="_blank" rel="noreferrer">查看源码、测试与文档</a>
+        <div class="hero-actions">
+          <a class="button primary" href="/workbench">运行杭州示例</a>
+          <a class="button secondary" href="https://github.com/KXHXK/fieldpilot" target="_blank" rel="noreferrer">查看源码、测试与文档</a>
+        </div>
       </div>
     </section>
 
