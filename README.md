@@ -64,7 +64,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 [FieldPilot 在线项目站](https://fieldpilot-kxh.netlify.app/) 使用 Vite `showcase` 构建模式展示业务问题、Agent Harness 组成、完整运行链路、Eval 驱动修正、检查点后缀重规划和验证边界；同一构建的 [`/workbench`](https://fieldpilot-kxh.netlify.app/workbench) 连接 [Render API](https://fieldpilot-api-t7m6.onrender.com/api/health)，可实际完成任务解释、持久化、规划、执行检查点与事件式重规划。
 
-当前生产部署为 Netlify deploy `6a6f13259646109fe6f02be6`。已验证根路径与 `/workbench` 返回 HTTPS 200、指纹化 JS/CSS 由 CDN 正确提供，CSP 只允许指定 Render API；Render 只向正式 Netlify origin 返回 CORS 许可，随机预览域名会被拒绝。在线浏览器已显示 `API ok`，杭州示例解析为可提交的两任务严格草案。
+当前生产部署为 Netlify deploy `6a6f2177f207a9dccf2184db`。已验证根路径与 `/workbench` 返回 HTTPS 200、指纹化 JS/CSS 由 CDN 正确提供，CSP 只允许指定 Render API；Render 只向正式 Netlify origin 返回 CORS 许可，随机预览域名会被拒绝。在线浏览器已显示 `API ok`，杭州示例解析为可提交的两任务严格草案。
 
 ## 本地运行
 
