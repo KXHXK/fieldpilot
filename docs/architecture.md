@@ -9,7 +9,7 @@ FieldPilot 处理 1～7 天、1～6 个工作地点的跨城外勤：任务有�
 ```mermaid
 flowchart LR
     UI["Vue 3 工作台"] --> API["FastAPI / Pydantic"]
-    API --> AG["PydanticAI Interpreter"]
+    API --> AG["Typed Semantic Agent Harness"]
     AG --> MS["Mission Application Service"]
     MS --> CP["Candidate Provider"]
     CP --> AM["Amap geo / route / meal POI"]
@@ -21,7 +21,7 @@ flowchart LR
     DB --> UI
 ```
 
-Agent 只把自然语言转为 `MissionDraft` 或澄清问题，工具数固定为 0。它不接触数据库、HTTP、文件和预订动作。应用服务将已确认草案转成 Mission；Provider 采集候选；确定性规划器计算方案；Verifier 在写入修订前独立复算不变量。
+Agent Harness 只把自然语言转为 `MissionDraft` 或澄清问题，并治理严格契约、有界模型调用、确定性后置校验、幂等、运行审计和 Eval 门禁；模型工具数固定为 0，不接触数据库、HTTP、文件和预订动作。应用服务将已确认草案转成 Mission；Provider 采集候选；确定性规划器计算方案；Verifier 在写入修订前独立复算不变量。完整分层、代码映射和业务运行过程见 [Agent Harness 设计](agent-harness.md)。
 
 这里的 Agent 特性不等于“让模型自由调用一切”：
 
@@ -29,7 +29,7 @@ Agent 只把自然语言转为 `MissionDraft` 或澄清问题，工具数固定�
 - **上下文管理**：短期语义上下文只包含本次文本、参考日期和时区；长期业务上下文由 Mission、Revision、Event、ProviderSnapshot 和 ExecutionCheckpoint 持久化。重规划读取当前事实与受保护前缀，不把整段聊天历史反复塞给模型。
 - **工具边界**：模型工具集合显式为空，防止不可信文字直接触发网络或副作用。高德/Fixture 等工具由应用服务在草案确认后通过 `CandidateProvider` 类型化端口调用，具有超时、重试、并发、预算、缓存、来源和降级治理。
 - **反馈闭环**：Policy Engine 和独立 Verifier 给出可解释约束反馈；现场事件形成新 Revision 与 Diff，而不是覆盖旧计划。
-- **可观测与评测**：AgentRun 保存输入指纹、Prompt/模型版本、模式、Token、延迟与失败类型；Mock 回归、TestModel 契约和真实模型固定集互相分离。
+- **可观测与评测**：AgentRun 保存输入指纹、Prompt/模型版本、模式、Token、延迟与失败类型；Mock 回归、TestModel 契约和真实模型固定集互相分离。15 场景 Kimi Live Eval 通过三轮失败样本把状态准确率从 53.33% 提升至 100%，而不是用 fallback 覆盖模型失败。
 
 ## 3. 为什么只使用 PydanticAI
 

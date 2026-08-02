@@ -4,7 +4,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 **在线项目站：** [fieldpilot-kxh.netlify.app](https://fieldpilot-kxh.netlify.app/) · **在线工作台：** [fieldpilot-kxh.netlify.app/workbench](https://fieldpilot-kxh.netlify.app/workbench) · **源代码：** [github.com/KXHXK/fieldpilot](https://github.com/KXHXK/fieldpilot)
 
-当前开发版本是 `0.5.0-dev`。PydanticAI 单 Agent 只负责自然语言到严格 MissionDraft 的转换；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
+当前开发版本是 `0.5.0-dev`。类型化语义 Agent Harness 负责把自然语言安全转换为严格 MissionDraft，并治理模型契约、调用预算、确定性后置校验、幂等、审计与 Eval；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
@@ -15,7 +15,8 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 ## 已完成的业务闭环
 
 ```text
-自然语言输入 -> PydanticAI MissionDraft / 澄清问题
+自然语言输入 -> Strict Contract -> PydanticAI MissionDraft
+-> Deterministic Guard -> AgentRun -> 澄清 / 用户确认
 -> Mission + VisitTask + ExpensePolicy 持久化
 -> Candidate Provider（高德路线/餐饮 POI live/mixed 或显式 Fixture）
 -> PolicyEngine -> Bounded Planner -> Independent Verifier
@@ -26,7 +27,8 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 已实现：
 
-- 自然语言双态输出：完整时生成严格草案，缺失时最多返回三组澄清问题；AgentRun 只保存输入指纹和结构化结果。
+- 类型化语义 Harness：自然语言完整时生成严格草案，缺失时最多返回三组澄清问题；模型工具数为 0、请求与 Token 有上限，确定性代码重算澄清、安全标签和显式日期。
+- AgentRun 只保存输入指纹、Prompt/模型版本、模式、Token、延迟、失败类别和结构化结果，不保存用户原文或模型自由文本。
 - 1～7 天、1～6 个工作任务、任务时窗、优先级、交通偏好与报销上限的严格领域契约。
 - 有界 Beam Search 返回最多三个方案；Policy Engine 过滤硬约束，Verifier 独立复算任务覆盖、时间重叠、费用和合规。
 - 高德 v3 地理编码与 v5 市内路线/周边餐饮 POI 适配，具备异步并发、超时、有限重试、调用预算、缓存和逐能力降级。
@@ -43,6 +45,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 | --- | --- | --- |
 | FastAPI + Pydantic 数据契约 | 已实现并测试 | 结构化 API 可复现 |
 | PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback、TestModel 测试与 15 场景 Kimi K2.6 真实模型评测 | 最终 run 15/15 live；fallback 不进入真实模型指标 |
+| Agent Harness | 已实现严格契约、有界调用、确定性护栏、幂等审计与版本化 Eval 门禁 | LLM 只解释语言；用户确认前无工具和业务副作用 |
 | 高德 v5 市内路线适配 | 已进入规划链路并完成 MockTransport 契约/故障测试；真实密钥未复验 | 已验证适配与降级，未验证实时服务可用性 |
 | 高德 v5 周边餐饮 POI | 已实现预算过滤、缓存、失败降级和来源快照；真实密钥未复验 | 无人均消费字段的 POI 不进入方案，Fixture 不冒充实时报价 |
 | Vue v1 任务、方案、来源与重规划工作台 | 已实现、生产构建并部署 | 本地完整链路与公网 Agent 解析/方案创建已用真实浏览器验收 |
@@ -59,7 +62,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 ## 公网项目站与在线工作台
 
-[FieldPilot 在线项目站](https://fieldpilot-kxh.netlify.app/) 使用 Vite `showcase` 构建模式展示业务问题、Agent 与确定性系统的职责边界、检查点后缀重规划、架构取舍和验证证据；同一构建的 [`/workbench`](https://fieldpilot-kxh.netlify.app/workbench) 连接 [Render API](https://fieldpilot-api-t7m6.onrender.com/api/health)，可实际完成任务解释、持久化、规划、执行检查点与事件式重规划。
+[FieldPilot 在线项目站](https://fieldpilot-kxh.netlify.app/) 使用 Vite `showcase` 构建模式展示业务问题、Agent Harness 组成、完整运行链路、Eval 驱动修正、检查点后缀重规划和验证边界；同一构建的 [`/workbench`](https://fieldpilot-kxh.netlify.app/workbench) 连接 [Render API](https://fieldpilot-api-t7m6.onrender.com/api/health)，可实际完成任务解释、持久化、规划、执行检查点与事件式重规划。
 
 当前生产部署为 Netlify deploy `6a6f13259646109fe6f02be6`。已验证根路径与 `/workbench` 返回 HTTPS 200、指纹化 JS/CSS 由 CDN 正确提供，CSP 只允许指定 Render API；Render 只向正式 Netlify origin 返回 CORS 许可，随机预览域名会被拒绝。在线浏览器已显示 `API ok`，杭州示例解析为可提交的两任务严格草案。
 
@@ -156,6 +159,7 @@ FieldPilot 的早期工程基础来自本人此前完成并部署的“智能旅
 
 ## 文档
 
+- [Agent Harness 设计、完整运行过程与真实 Eval](docs/agent-harness.md)
 - [架构与技术取舍](docs/architecture.md)
 - [简历与面试事实口径](docs/resume-project-description.md)
 - [后续迭代边界](docs/roadmap.md)
