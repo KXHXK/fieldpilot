@@ -28,9 +28,22 @@ const currentTimeline = computed(() => timeline[revision.value]);
 
 const evidence = [
   ["51 passed", "后端全量回归"],
-  ["0004", "Alembic 最新迁移"],
+  ["15 / 15", "Kimi Live Eval"],
   ["V2", "执行检查点"],
   ["6 / 11", "变化段 / 保持段"]
+] as const;
+
+const harnessLayers = [
+  ["01", "Strict Contract", "Pydantic 校验 request、时区、日期、任务时间窗和费用上限。"],
+  ["02", "Bounded Model", "PydanticAI 类型化输出；tools=0，最多 2 次请求并限制总 Token。"],
+  ["03", "Deterministic Guard", "从 typed draft 与原始输入重算澄清、安全标签和显式日期。"],
+  ["04", "Idempotent Trace", "输入指纹、唯一 request_id、Prompt 版本、用量、延迟与失败分类可审计。"]
+] as const;
+
+const evalIterations = [
+  ["原始真实基线", "53.33%", "94.87%", "0%", "86.67%"],
+  ["确定性护栏后", "93.33%", "100%", "86.67%", "100%"],
+  ["完整性规则修正", "100%", "94.87%", "93.33%", "100%"]
 ] as const;
 
 const stack = [
@@ -50,6 +63,7 @@ const stack = [
       <div>
         <a href="#flow">闭环</a>
         <a href="#architecture">架构</a>
+        <a href="#harness">Harness</a>
         <a href="#evidence">证据</a>
         <a href="#boundary">边界</a>
       </div>
@@ -61,7 +75,7 @@ const stack = [
         <p class="eyebrow">FIELD MISSION ORCHESTRATION · LIVE SYSTEM</p>
         <h1>把出差要求，<br /><em>变成可执行行程。</em></h1>
         <p class="hero-summary">
-          FieldPilot 面向跨省市外勤场景，把地点、任务时间窗、紧密程度与报销规则转成可验证的交通、住宿、餐饮和多点任务方案；途中变化通过事件与执行检查点安全重规划。
+          FieldPilot 面向跨省市外勤场景。类型化语义 Harness 把不可信口语转成可确认的 MissionDraft；确定性规划内核再把地点、任务时间窗、紧密程度与报销规则转成可验证的交通、住宿、餐饮和多点任务方案。
         </p>
         <div class="hero-actions">
           <a class="button primary" href="/workbench">打开在线工作台</a>
@@ -143,6 +157,63 @@ const stack = [
       </div>
     </section>
 
+    <section id="harness" class="showcase-section harness-section">
+      <div class="section-heading harness-heading">
+        <div>
+          <p class="kicker">TYPED SEMANTIC HARNESS</p>
+          <h2>限制模型能做什么，<br />再让业务代码决定能否执行。</h2>
+        </div>
+        <p>Harness 不是第二个规划器，也不把交通工具交给模型。它只管理自然语言入口的契约、调用预算、确定性护栏、失败降级、幂等和审计；用户确认后才进入 Provider、Planner、Policy 与 Verifier。</p>
+      </div>
+
+      <div class="harness-boundary" aria-label="FieldPilot Agent Harness 技术架构">
+        <div class="harness-lane model-lane">
+          <span class="lane-label">UNTRUSTED LANGUAGE</span>
+          <div class="harness-node">用户口语<br /><small>reference_date · timezone · text</small></div>
+          <i>→</i>
+          <div class="harness-node accent">PydanticAI<br /><small>MissionDraft · tools = 0</small></div>
+          <i>→</i>
+          <div class="harness-node">Deterministic Guard<br /><small>clarification · safety · date</small></div>
+          <i>→</i>
+          <div class="harness-node">AgentRun<br /><small>fingerprint · trace · usage</small></div>
+        </div>
+        <div class="boundary-gate"><span>USER CONFIRMATION</span><b>↓</b></div>
+        <div class="harness-lane business-lane">
+          <span class="lane-label">DETERMINISTIC BUSINESS CORE</span>
+          <div class="harness-node">Provider Port<br /><small>Amap / Fixture / Snapshot</small></div>
+          <i>→</i>
+          <div class="harness-node">Beam Planner<br /><small>bounded candidate search</small></div>
+          <i>→</i>
+          <div class="harness-node">Policy Engine<br /><small>expense constraints</small></div>
+          <i>→</i>
+          <div class="harness-node accent">Verifier<br /><small>independent invariants</small></div>
+          <i>→</i>
+          <div class="harness-node">Revision State<br /><small>R1 · checkpoint · event · R2</small></div>
+        </div>
+      </div>
+
+      <div class="harness-layer-grid">
+        <article v-for="layer in harnessLayers" :key="layer[0]">
+          <span>{{ layer[0] }}</span><strong>{{ layer[1] }}</strong><p>{{ layer[2] }}</p>
+        </article>
+      </div>
+
+      <div class="eval-story">
+        <div class="eval-copy">
+          <p class="kicker">EVAL-DRIVEN HARDENING</p>
+          <h3>不是“模型一次跑通”，而是用失败样本收紧 Harness。</h3>
+          <p>15 个固定场景覆盖完整输入、缺失信息、单一交通方式、精确报销字段、任务时窗和 Prompt Injection。只有 Live 调用进入质量分数，任何 fallback 都会让工作流失败。</p>
+          <small>最终轮次：15/15 live · P50/P95 16.91/26.92 s · 22,788 tokens</small>
+        </div>
+        <div class="eval-table" role="table" aria-label="FieldPilot 三轮真实模型评测">
+          <div class="eval-row eval-head" role="row"><span>迭代</span><span>状态</span><span>字段</span><span>澄清</span><span>安全</span></div>
+          <div v-for="row in evalIterations" :key="row[0]" class="eval-row" role="row">
+            <strong>{{ row[0] }}</strong><span>{{ row[1] }}</span><span>{{ row[2] }}</span><span>{{ row[3] }}</span><b>{{ row[4] }}</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="evidence" class="showcase-section evidence-section">
       <div class="section-heading compact">
         <p class="kicker">VERIFIED DELIVERY</p>
@@ -156,6 +227,8 @@ const stack = [
         <article><span>PUBLIC RUNTIME</span><strong>Render + Neon 重启恢复通过</strong><p>公网 smoke 覆盖 R1、事件式 R2、执行检查点和严格前缀保留；服务重启后仍可读取 Mission、Revision 与 Event。</p></article>
       </div>
       <div class="evidence-actions">
+        <a href="https://github.com/KXHXK/fieldpilot/blob/main/docs/agent-harness.md" target="_blank" rel="noreferrer">Harness 设计 ↗</a>
+        <a href="https://github.com/KXHXK/fieldpilot/blob/main/docs/evals/mission-interpret-live-v1-report.md" target="_blank" rel="noreferrer">真实 Eval ↗</a>
         <a href="https://github.com/KXHXK/fieldpilot/blob/main/docs/development-log.md" target="_blank" rel="noreferrer">开发日志 ↗</a>
         <a href="https://github.com/KXHXK/fieldpilot/blob/main/docs/demo-guide.md" target="_blank" rel="noreferrer">五分钟演示 ↗</a>
         <a href="https://github.com/KXHXK/fieldpilot/actions" target="_blank" rel="noreferrer">CI 记录 ↗</a>
@@ -173,7 +246,8 @@ const stack = [
           <li><b>已实现：</b>高德路线/餐饮适配契约、降级、缓存与来源快照。</li>
           <li><b>当前 Fixture：</b>铁路、航班、酒店库存和价格，不抓取 12306 内部接口。</li>
           <li><b>公网已验证：</b>Docker/FastAPI、Neon PostgreSQL、CORS、完整 smoke 与重启后持久化。</li>
-          <li><b>仍未验证：</b>真实高德 Key、生产限流和多租户身份隔离；公开环境使用 Mock LLM 与 Fixture Provider。</li>
+          <li><b>Agent 边界：</b>公开工作台使用 Mock LLM；真实 Kimi 指标来自独立 no-fallback Eval，不混入线上演示数据。</li>
+          <li><b>仍未验证：</b>真实高德 Key、生产限流和多租户身份隔离；公开 Provider 使用明确 Fixture。</li>
           <li><b>算法口径：</b>有界 Beam Search 可解释、可复现，但不声称全局最优。</li>
         </ul>
         <div class="hero-actions">
@@ -191,4 +265,7 @@ const stack = [
 .showcase-shell{width:min(1180px,calc(100% - 40px));margin:0 auto;color:#17251e}.showcase-nav{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:18px 0;background:rgba(244,246,241,.9);border-bottom:1px solid #d9dfd8;backdrop-filter:blur(12px)}.showcase-nav a{color:inherit;text-decoration:none}.showcase-nav>div{display:flex;gap:28px;font-size:12px;font-weight:700}.brand{display:flex;align-items:center;gap:10px;font-weight:800}.brand span{display:grid;place-items:center;width:31px;height:31px;color:#fff;background:#174e39;border-radius:9px;font-size:11px}.source-link{justify-self:end;padding:9px 13px;border:1px solid #b9c8be;border-radius:9px;color:#174e39!important;font-size:11px;font-weight:800}.showcase-hero{display:grid;grid-template-columns:1.25fr .75fr;gap:72px;align-items:center;min-height:660px;padding:80px 0}.eyebrow,.kicker{margin:0 0 18px;color:#e5663e;font-size:11px;font-weight:800;letter-spacing:.16em}.showcase-hero h1{margin:0;font-size:clamp(54px,7vw,94px);line-height:.98;letter-spacing:-.065em}.showcase-hero h1 em{color:#1c694a;font-style:normal}.hero-summary{max-width:760px;margin:30px 0 0;color:#58675f;font-size:16px;line-height:1.9}.hero-actions{display:flex;gap:12px;margin-top:32px}.button{display:inline-flex;align-items:center;justify-content:center;padding:12px 17px;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800}.button.primary{color:#fff;background:#1c694a}.button.secondary{color:#17251e;background:#e4e9e3}.mission-card{padding:32px;color:#eff7f1;background:#123e2e;border-radius:24px;box-shadow:0 28px 80px rgba(18,62,46,.18)}.card-label{color:#9cc2ae;font-size:9px;letter-spacing:.13em}.mission-card>strong{display:block;margin:14px 0 7px;font-size:30px}.mission-card>p,.mission-card>small{color:#b8d0c3;line-height:1.65}.route-line{display:grid;grid-template-columns:12px 1fr 12px 1fr 12px;align-items:center;margin:30px 0}.route-line i{height:12px;background:#c5f04d;border:3px solid #486e5e;border-radius:50%}.route-line b{height:1px;background:#66897a}.mission-card dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 22px}.mission-card dl div{padding:12px;background:rgba(255,255,255,.06);border-radius:10px}.mission-card dt{color:#9cc2ae;font-size:9px}.mission-card dd{margin:6px 0 0;font-size:13px;font-weight:800}.fact-strip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #d6ddd6;border-bottom:1px solid #d6ddd6}.fact-strip article{padding:25px;border-right:1px solid #d6ddd6}.fact-strip article:last-child{border-right:0}.fact-strip strong,.fact-strip span{display:block}.fact-strip strong{color:#174e39;font-size:27px}.fact-strip span{margin-top:6px;color:#6a776f;font-size:10px;letter-spacing:.07em}.showcase-section{padding:110px 0;border-bottom:1px solid #d6ddd6}.section-heading{display:grid;grid-template-columns:1.05fr .95fr;gap:70px;align-items:end;margin-bottom:50px}.section-heading h2{margin:0;font-size:clamp(38px,5vw,66px);line-height:1.08;letter-spacing:-.05em}.section-heading>p:last-child{color:#647169;line-height:1.85}.section-heading.compact{display:block;max-width:760px}.flow-grid{display:grid;grid-template-columns:.72fr 1.28fr;gap:18px}.trace-card,.timeline-card{padding:30px;background:#fff;border:1px solid #d7dfd8;border-radius:20px}.trace-steps{display:grid;gap:0;padding:0;margin:0;list-style:none}.trace-steps li{display:grid;grid-template-columns:42px 1fr;gap:13px;min-height:70px}.trace-steps li>span{display:grid;place-items:center;width:31px;height:31px;color:#1c694a;background:#e3efe7;border-radius:9px;font-size:10px;font-weight:800}.trace-steps li:not(:last-child)>span:after{content:"";position:absolute;width:1px;height:39px;margin-top:70px;background:#cdd9d1}.trace-steps strong,.trace-steps small{display:block}.trace-steps small{margin-top:5px;color:#758178}.timeline-card>header{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid #e1e6e1}.timeline-card header span,.timeline-card header strong{display:block}.timeline-card header span{color:#758178;font-size:9px;letter-spacing:.12em}.timeline-card header strong{margin-top:6px}.revision-tabs{display:flex;gap:5px}.revision-tabs button{padding:7px 10px;color:#526058;background:#edf1ed;border:0;border-radius:7px;font-size:10px}.revision-tabs button.active{color:#fff;background:#1c694a}.showcase-timeline{padding-top:24px}.showcase-timeline article{display:grid;grid-template-columns:75px 14px 1fr;gap:13px;min-height:74px}.showcase-timeline time{font-size:11px;font-weight:800;text-align:right}.showcase-timeline i{position:relative;width:10px;height:10px;background:#1c694a;border:3px solid #deebe3;border-radius:50%}.showcase-timeline i:after{content:"";position:absolute;top:9px;left:2px;width:1px;height:56px;background:#ced8d1}.showcase-timeline article:last-child i:after{display:none}.showcase-timeline strong,.showcase-timeline p{display:block;margin:0}.showcase-timeline p{margin-top:5px;color:#718078;font-size:10px}.showcase-timeline span{display:inline-block;margin-top:7px;padding:3px 6px;color:#1b6044;background:#e4f0e8;border-radius:5px;font-size:8px;font-weight:800;text-transform:uppercase}.showcase-timeline .state-changed i{background:#e5663e;border-color:#f8ddd4}.showcase-timeline .state-completed{opacity:.72}.showcase-timeline .state-completed strong{text-decoration:line-through}.timeline-card>footer{display:flex;justify-content:space-between;padding-top:17px;border-top:1px solid #e1e6e1;font-size:10px}.timeline-card>footer b{color:#e5663e}.architecture-section{background:#173f30;color:#edf6ef;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);padding-left:max(20px,calc((100vw - 1180px)/2));padding-right:max(20px,calc((100vw - 1180px)/2))}.architecture-section .kicker{color:#c8ee55}.architecture-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr;gap:10px;align-items:center;margin:52px 0}.architecture-flow>div{padding:19px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:14px}.architecture-flow span,.architecture-flow strong,.architecture-flow small{display:block}.architecture-flow span{color:#c8ee55;font-size:9px}.architecture-flow strong{margin-top:10px;font-size:13px}.architecture-flow small{margin-top:5px;color:#a8c0b2;font-size:9px}.architecture-flow>i{color:#8daa9b;font-style:normal}.stack-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stack-grid article{padding:21px;background:#f0f5f1;border-radius:14px;color:#17251e}.stack-grid p{margin:8px 0 0;color:#66736b;font-size:11px;line-height:1.65}.evidence-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.evidence-grid article{padding:27px;background:#fff;border:1px solid #d7dfd8;border-radius:17px}.evidence-grid span{color:#e5663e;font-size:9px;font-weight:800;letter-spacing:.12em}.evidence-grid strong{display:block;margin-top:12px;font-size:18px}.evidence-grid p{margin:9px 0 0;color:#66736b;font-size:12px;line-height:1.7}.evidence-actions{display:flex;gap:10px;margin-top:18px}.evidence-actions a{padding:10px 13px;color:#174e39;background:#e5ede7;border-radius:8px;text-decoration:none;font-size:10px;font-weight:800}.boundary-section{display:grid;grid-template-columns:1fr 1fr;gap:80px}.boundary-section h2{margin:0;font-size:clamp(38px,5vw,62px);line-height:1.07;letter-spacing:-.045em}.boundary-copy>p,.boundary-copy li{color:#5f6d65;line-height:1.75}.boundary-copy ul{display:grid;gap:8px;padding-left:20px;margin:22px 0 30px}.boundary-copy b{color:#20342a}.showcase-footer{display:flex;justify-content:space-between;padding:28px 0;color:#6e7c74;font-size:9px;letter-spacing:.1em}.showcase-footer b{color:#174e39}@media(max-width:900px){.showcase-nav{grid-template-columns:1fr auto}.showcase-nav>div{display:none}.showcase-hero,.section-heading,.flow-grid,.boundary-section{grid-template-columns:1fr}.showcase-hero{gap:42px;padding:60px 0}.fact-strip{grid-template-columns:repeat(2,1fr)}.fact-strip article:nth-child(2){border-right:0}.fact-strip article:nth-child(-n+2){border-bottom:1px solid #d6ddd6}.architecture-flow{grid-template-columns:1fr}.architecture-flow>i{transform:rotate(90deg);justify-self:center}.stack-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.showcase-shell{width:min(100% - 24px,1180px)}.showcase-hero h1{font-size:49px}.mission-card{padding:24px}.mission-card dl,.stack-grid,.evidence-grid{grid-template-columns:1fr}.fact-strip strong{font-size:22px}.showcase-section{padding:75px 0}.trace-card,.timeline-card{padding:20px}.revision-tabs{display:grid}.showcase-timeline article{grid-template-columns:58px 12px 1fr}.evidence-actions,.showcase-footer{display:grid}.architecture-section{padding-left:12px;padding-right:12px}.source-link{font-size:0}.source-link:after{content:"↗";font-size:12px}}
 .architecture-section{margin-left:0;margin-right:0;padding-left:50px;padding-right:50px;border-radius:28px}
 @media(max-width:560px){.architecture-section{padding-left:20px;padding-right:20px}}
+.harness-section{position:relative}.harness-heading{align-items:start}.harness-boundary{display:grid;gap:18px;padding:28px;background:#fff;border:1px solid #d4ded7;border-radius:22px;box-shadow:0 20px 60px rgba(23,63,48,.07)}.harness-lane{display:grid;grid-template-columns:minmax(130px,.8fr) repeat(7,auto);gap:10px;align-items:center}.harness-lane.business-lane{grid-template-columns:minmax(130px,.8fr) repeat(9,auto)}.lane-label{align-self:stretch;display:flex;align-items:center;padding:12px;color:#1c694a;background:#e7f0ea;border-radius:11px;font-size:9px;font-weight:800;letter-spacing:.11em}.harness-node{min-width:122px;padding:16px 13px;background:#f3f5f2;border:1px solid #d9e0da;border-radius:12px;font-size:11px;font-weight:800;line-height:1.5}.harness-node small{color:#718078;font-size:8px;font-weight:600}.harness-node.accent{color:#fff;background:#174e39;border-color:#174e39}.harness-node.accent small{color:#b9d4c5}.harness-lane i{color:#8aa096;font-style:normal}.boundary-gate{display:flex;align-items:center;justify-content:center;gap:14px;color:#d45d39;font-size:9px;font-weight:800;letter-spacing:.12em}.boundary-gate b{font-size:17px}.harness-layer-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.harness-layer-grid article{padding:22px;background:#173f30;border-radius:15px;color:#edf6ef}.harness-layer-grid span{color:#c8ee55;font-size:9px;font-weight:800}.harness-layer-grid strong{display:block;margin-top:10px;font-size:14px}.harness-layer-grid p{margin:8px 0 0;color:#adc4b7;font-size:10px;line-height:1.7}.eval-story{display:grid;grid-template-columns:.85fr 1.15fr;gap:28px;margin-top:18px;padding:28px;background:#eef2ed;border-radius:20px}.eval-copy h3{margin:0;font-size:25px;line-height:1.22}.eval-copy>p:not(.kicker){color:#647169;font-size:11px;line-height:1.75}.eval-copy small{color:#1c694a;font-size:9px;font-weight:800}.eval-table{display:grid;align-content:center;min-width:0;overflow-x:auto}.eval-row{display:grid;grid-template-columns:1.7fr repeat(4,.65fr);min-width:530px;border-bottom:1px solid #d2dcd4}.eval-row>*{padding:11px 8px;font-size:10px;text-align:right}.eval-row>*:first-child{text-align:left}.eval-row b{color:#1c694a}.eval-head{color:#78847c;font-size:8px;font-weight:800;letter-spacing:.06em}.eval-head>*{font-size:8px}.eval-row:last-child{border-bottom:0}
+@media(max-width:900px){.harness-lane,.harness-lane.business-lane{grid-template-columns:1fr}.harness-lane i{justify-self:center;transform:rotate(90deg)}.harness-layer-grid{grid-template-columns:repeat(2,1fr)}.eval-story{grid-template-columns:1fr}}
+@media(max-width:560px){.harness-boundary,.eval-story{padding:19px}.harness-layer-grid{grid-template-columns:1fr}.harness-node{min-width:0}.eval-copy h3{font-size:21px}}
 </style>

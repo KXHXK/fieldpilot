@@ -350,3 +350,10 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 将同一 Netlify `showcase` 构建扩展为“根路径项目专题 + `/workbench` 在线工作台”，生产 CSP 只放行指定 Render API。正式站点真实浏览器显示 `API ok`，杭州示例经 Agent 解析后得到可提交的两任务严格草案。
 - Netlify 账户直接生产发布仍返回 403；预览 deploy `6a6f13259646109fe6f02be6` 构建并上传成功后，通过 Netlify 官方 restore deploy 操作晋升为同一份生产产物，没有重建或替换文件。
 - 公网环境明确使用 Mock LLM 与 Fixture Provider；真实高德 Key、生产限流、多租户认证和真实预订仍不属于已验证能力。
+
+## 2026-08-02｜Stage 15：Agent Harness 技术叙事与交付同步
+
+- 将已有实现归纳为“类型化语义 Agent Harness + 确定性业务编排内核”：Harness 负责严格契约、PydanticAI 有界调用、确定性后置护栏、运行模式、幂等审计和版本化 Eval，不把 Planner、Provider 或数据库包装成模型工具。
+- 新增 `docs/agent-harness.md`，用可追溯的代码映射说明 Harness 组成、上下文生命周期、Provider 治理、完整业务运行过程、失败降级、审计链和当前未验证边界。
+- 公网项目专题增加双层技术架构、四层 Harness 组成和三轮真实 Kimi Eval 对照；同时明确公开工作台使用 Mock LLM/Fixture Provider，真实模型指标来自独立 no-fallback 工作流。
+- 将上述已验证事实正式移交“简历制定”和“作品集网站”任务；简历与总作品集只引用最终真实轮次，不把单次调用写成稳定率，也不声称多 Agent、MCP、RAG 或真实预订。
