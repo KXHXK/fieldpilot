@@ -2,13 +2,13 @@
 
 FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地点、任务时间窗、紧密程度、交通偏好和公司报销规则转换为可验证、可比较、可动态重规划的执行方案。
 
-**在线专题：** [fieldpilot-kxh.netlify.app](https://fieldpilot-kxh.netlify.app/) · **源代码：** [github.com/KXHXK/fieldpilot](https://github.com/KXHXK/fieldpilot)
+**在线项目站：** [fieldpilot-kxh.netlify.app](https://fieldpilot-kxh.netlify.app/) · **在线工作台：** [fieldpilot-kxh.netlify.app/workbench](https://fieldpilot-kxh.netlify.app/workbench) · **源代码：** [github.com/KXHXK/fieldpilot](https://github.com/KXHXK/fieldpilot)
 
 当前开发版本是 `0.5.0-dev`。PydanticAI 单 Agent 只负责自然语言到严格 MissionDraft 的转换；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
-当前实现已完成领域持久化、有限搜索规划、高德路线与餐饮适配及降级、Agent 解析与审计、事件驱动重规划、执行检查点、严格后缀重规划、修订差异和 Vue 工作台闭环。面向访客的静态专题页已独立部署；可写的 FastAPI/PostgreSQL 公网后端、高德与 LLM 真实密钥、Docker 容器仍未完成验证，相关能力不会冒充已上线。
+当前实现已完成领域持久化、有限搜索规划、高德路线与餐饮适配及降级、Agent 解析与审计、事件驱动重规划、执行检查点、严格后缀重规划、修订差异和 Vue 工作台闭环。项目站与可写工作台部署在 Netlify，Render Docker/FastAPI 连接 Neon PostgreSQL；公网健康/就绪、完整写入 smoke、生产 CORS 与重启后持久化均已验证。公开环境仍使用 Mock LLM 与 Fixture Provider，不把合成库存或价格冒充实时数据。
 
 ![FieldPilot v1 工作台](docs/fieldpilot-workbench.png)
 
@@ -42,11 +42,11 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 | 能力 | 当前状态 | 验收边界 |
 | --- | --- | --- |
 | FastAPI + Pydantic 数据契约 | 已实现并测试 | 结构化 API 可复现 |
-| PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback、TestModel 测试与 15 场景真实模型评测工作流；真实运行等待工作流凭证环境 | fallback 不计入真实模型指标，失败时工作流失败 |
+| PydanticAI 单 Agent + MissionDraft | 已实现结构化输出、Mock/fallback、TestModel 测试与 15 场景 Kimi K2.6 真实模型评测 | 最终 run 15/15 live；fallback 不进入真实模型指标 |
 | 高德 v5 市内路线适配 | 已进入规划链路并完成 MockTransport 契约/故障测试；真实密钥未复验 | 已验证适配与降级，未验证实时服务可用性 |
 | 高德 v5 周边餐饮 POI | 已实现预算过滤、缓存、失败降级和来源快照；真实密钥未复验 | 无人均消费字段的 POI 不进入方案，Fixture 不冒充实时报价 |
-| Vue v1 任务、方案、来源与重规划工作台 | 已实现并完成生产构建 | 本地真实浏览器链路已验收 |
-| Mission、政策快照与计划修订持久化 | 已实现并测试 | SQLite 已验证，PostgreSQL 容器尚未实跑 |
+| Vue v1 任务、方案、来源与重规划工作台 | 已实现、生产构建并部署 | 本地完整链路与公网 Agent 解析/方案创建已用真实浏览器验收 |
+| Mission、政策快照与计划修订持久化 | 已实现并测试 | SQLite 与 Neon PostgreSQL 已验证；Render 重启后数据仍可读取 |
 | 有限搜索 Planner + Policy Engine + 独立 Verifier | 已实现；跨城、酒店和无 Key 餐饮使用明确 Fixture | 确定性规划可复现，数据模式必须随 segment 传递 |
 | 计划请求幂等、revision 冲突与激活 | 已实现并测试 | 并发与重放路径已有接口测试 |
 | AgentRun 审计、幂等与固定集 | 已实现输入指纹、trace 查询、5 场景 Mock 基线与独立 15 场景 live 固定集 | Mock 与 live 指标、数据集和报告分离 |
@@ -54,14 +54,14 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 | ExecutionCheckpoint 与严格后缀重规划 | 已实现命令幂等、版本冲突、单调锁定/完成和前缀逐段一致性校验 | 只重算检查点后的可变后缀；有界搜索不声称全局最优 |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 当前业务不需要 |
 | RAG、审批流、SSE、全局路线最优化 | 未实现 | 不属于当前已验收能力 |
-| 独立公网静态专题页 | 已部署并完成 HTTP/CDN 验证 | 独立 URL，只展示经验证的架构、流程与边界，不连接可写后端 |
-| FastAPI/PostgreSQL 公网服务 | 已提供 Render Blueprint、Neon URL 兼容和生产 CORS 配置；等待平台账号授权后部署 | 未取得公网 health/ready 与持久化证据前仍标记为未上线 |
+| 公网项目站与在线工作台 | 已部署并完成 HTTP/CDN、SPA 路由及浏览器验证 | 根路径讲解架构，`/workbench` 调用生产 API；外部数据模式逐段标记 |
+| FastAPI/PostgreSQL 公网服务 | Render Docker/FastAPI 与 Neon PostgreSQL 已部署 | health/ready、完整 R1/R2 smoke、CORS 和重启恢复均通过；免费层存在冷启动 |
 
-## 公网静态专题
+## 公网项目站与在线工作台
 
-[FieldPilot 在线专题](https://fieldpilot-kxh.netlify.app/) 使用独立的 Vite `showcase` 构建模式，展示真实问题、Agent 与确定性系统的职责边界、检查点后缀重规划、架构取舍和验证证据。它与本地 Vue 工作台共用已验证的业务事实，但不调用或模拟一个不存在的公网后端。
+[FieldPilot 在线项目站](https://fieldpilot-kxh.netlify.app/) 使用 Vite `showcase` 构建模式展示业务问题、Agent 与确定性系统的职责边界、检查点后缀重规划、架构取舍和验证证据；同一构建的 [`/workbench`](https://fieldpilot-kxh.netlify.app/workbench) 连接 [Render API](https://fieldpilot-api-t7m6.onrender.com/api/health)，可实际完成任务解释、持久化、规划、执行检查点与事件式重规划。
 
-当前生产部署为 Netlify deploy `6a6c82f34f699af981dae355`。已验证根路径和 SPA 回退返回 HTTPS 200、指纹化 JS/CSS 资源由 CDN 正确提供，CSP、COOP、`nosniff`、Referrer-Policy 与 Permissions-Policy 响应头生效。完整任务录入、持久化和重规划操作请按下文启动本地前后端。
+当前生产部署为 Netlify deploy `6a6f13259646109fe6f02be6`。已验证根路径与 `/workbench` 返回 HTTPS 200、指纹化 JS/CSS 由 CDN 正确提供，CSP 只允许指定 Render API；Render 只向正式 Netlify origin 返回 CORS 许可，随机预览域名会被拒绝。在线浏览器已显示 `API ok`，杭州示例解析为可提交的两任务严格草案。
 
 ## 本地运行
 
@@ -139,7 +139,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前结果（2026-08-01）：后端 `51 passed`；Neon PostgreSQL 已执行 Alembic 至 `20260731_0004 (head)` 并通过就绪查询；完整工作台与静态专题两种前端生产构建成功；Kimi K2.6 的 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%。本地 HTTP 冒烟、真实浏览器主链路和公网专题 HTTP/CDN 检查通过。Docker CLI 未安装，Render 公网容器仍等待控制台授权，因此不声称后端已上线。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-08-02）：后端 `51 passed`；Neon PostgreSQL 已执行 Alembic 至 `20260731_0004 (head)`；完整工作台与项目专题两种前端生产构建成功；Kimi K2.6 的 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%。本地链路、Render 公网 R1/R2 smoke、重启后持久化、生产 CORS、Netlify HTTP/CDN 和公网真实浏览器链路均通过。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 

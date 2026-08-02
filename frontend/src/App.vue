@@ -274,7 +274,7 @@ function reset() {
   <main>
     <header class="topbar">
       <a class="brand" href="#" @click.prevent="reset"><span>FP</span><strong>FieldPilot</strong></a>
-      <nav><span class="live-dot" />API {{ health }}</nav>
+      <nav><a href="/">项目说明</a><span class="live-dot" />API {{ health }}</nav>
       <button class="text-button" @click="probeHealth">健康检查</button>
     </header>
 

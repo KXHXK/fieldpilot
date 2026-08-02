@@ -341,3 +341,12 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 评测器在每例仅一次调用时将稳定率记为 `null`，避免把单样本恒等误写为 100% 稳定；artifact 新增实际澄清字段名，仍不保存用户原文或模型自由文本。
 - Neon `fieldpilot` 数据库完成四段 Alembic migration，`alembic current` 为 `20260731_0004 (head)`，并通过独立 `SELECT 1` 就绪查询。连接凭证只在进程环境中短暂使用，未写入仓库或日志。
 - 后端全量回归为 `51 passed`。Render CLI 到 `api.render.com` 的 device-grant 请求持续网络超时，应用内控制台又处于未登录状态，因此公网容器发布仍等待一次人工登录授权。
+
+## 2026-08-02｜Stage 14：零成本公网闭环与在线工作台
+
+- 通过 Render Blueprint 创建 Singapore Free Docker Web Service `fieldpilot-api`，连接 Neon `fieldpilot` PostgreSQL；启动时 Alembic migration、`/api/health` 与 `/api/ready` 均成功，初始生产部署 commit 为 `bc53426`。
+- 公网完整 smoke 覆盖 Mission、R1 激活、执行检查点、任务改期事件、R2、Revision Diff 与严格受保护前缀，输出 `protected_prefix_unchanged=true`。手动重启 Render 后既有 Mission、R1/R2、Event 与执行检查点仍可读取。
+- 验证生产 CORS 只允许 `https://fieldpilot-kxh.netlify.app`；随机 Netlify Deploy Preview origin 无许可。数据库 owner 凭证随后完成轮换，旧凭证失效，连接串未写入仓库或文档。
+- 将同一 Netlify `showcase` 构建扩展为“根路径项目专题 + `/workbench` 在线工作台”，生产 CSP 只放行指定 Render API。正式站点真实浏览器显示 `API ok`，杭州示例经 Agent 解析后得到可提交的两任务严格草案。
+- Netlify 账户直接生产发布仍返回 403；预览 deploy `6a6f13259646109fe6f02be6` 构建并上传成功后，通过 Netlify 官方 restore deploy 操作晋升为同一份生产产物，没有重建或替换文件。
+- 公网环境明确使用 Mock LLM 与 Fixture Provider；真实高德 Key、生产限流、多租户认证和真实预订仍不属于已验证能力。

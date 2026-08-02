@@ -2,9 +2,9 @@
 
 ## P0：交付验收
 
-- 在具备 Docker 的环境运行 PostgreSQL Compose，验证 migration、ready probe、Nginx 代理、数据持久化与重启恢复。
+- [云端已完成] Render Docker + Neon PostgreSQL 已验证 migration、ready probe、数据持久化与重启恢复；本地 Compose/Nginx 仍因本机无 Docker CLI 未实跑。
 - 用独立高德 Web Service Key 执行最小真实路线验收，保存脱敏快照；用模型 Key 跑 `mission-interpret-v1` 固定集，生成与 Mock 分开的延迟、Token、失败率和字段指标。
-- [已完成] 增加浏览器主链路验收与工作台截图，并发布独立静态专题地址；不复用智能旅游助手域名。完整可写公网后端仍未部署。
+- [已完成] 增加浏览器主链路验收与工作台截图，发布独立项目站、在线工作台和可写公网后端；不复用智能旅游助手域名。
 
 ## P1：补齐核心业务
 

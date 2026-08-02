@@ -16,7 +16,7 @@ PydanticAI、FastAPI、Pydantic v2、SQLAlchemy/Alembic、Vue 3/TypeScript、htt
 
 ## 60 秒讲法
 
-FieldPilot 来自我真实跨省市出差时反复遇到的痛点：工作地点有时间窗，交通、酒店和餐饮分散在不同平台，公司又有报销上限，临时改期后很难快速确认整条行程仍可执行。我没有让大模型直接生成行程，而是让一个 PydanticAI Agent 只做口语到严格任务草案的转换；确认后由 Provider 层拿候选，确定性 Planner 做有界搜索，Policy Engine 算报销规则，再由独立 Verifier 复算不变量。计划和候选来源都会存成版本。现场改期时，事件在同一事务里修改事实，新计划引用事件，并输出前后成本、评分和行程段差异。当前无密钥 Fixture 全链路和故障路径已验证；真实高德/模型 Key 与公网部署我会明确说还没完成，不拿 Mock 指标冒充线上效果。
+FieldPilot 来自我真实跨省市出差时反复遇到的痛点：工作地点有时间窗，交通、酒店和餐饮分散在不同平台，公司又有报销上限，临时改期后很难快速确认整条行程仍可执行。我没有让大模型直接生成行程，而是让一个 PydanticAI Agent 只做口语到严格任务草案的转换；确认后由 Provider 层拿候选，确定性 Planner 做有界搜索，Policy Engine 算报销规则，再由独立 Verifier 复算不变量。计划和候选来源都会存成版本。现场改期时，事件在同一事务里修改事实，新计划引用事件，并输出前后成本、评分和行程段差异。Kimi K2.6 独立真实评测与无密钥 Fixture 全链路已经验证；Render Docker/FastAPI、Neon PostgreSQL 和 Netlify 工作台已经上线。公开环境仍明确使用 Mock LLM/Fixture，不把它描述为实时库存或生产 SLA。
 
 ## 高频追问
 
@@ -36,6 +36,6 @@ Agent 负责从不完整口语中抽取多类约束并生成最少澄清问题�
 
 - “真实高德/Kimi/12306 已上线”或“实时库存准确”。
 - “全局最优”“增量后缀重规划”“所有天气/延误自动处置”。
-- “生产 PostgreSQL/Docker/公网稳定运行”——仅提供配置，尚未完成本机容器与云端验证。
+- “生产级稳定性/SLA/多租户隔离”——当前验证的是免费层公网闭环、重启恢复和精确 CORS，不等于生产流量验证。
 - CrewAI、LlamaIndex、RAG、MCP、SSE、HITL、自动预订。
 - Mock 固定集的 1.00 指标作为真实模型准确率。

@@ -75,4 +75,4 @@ SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、P
 
 ## 8. 交付边界
 
-本地已验证 SQLite、51 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。Neon `fieldpilot` 数据库已实际迁移到 head 并通过就绪查询；Kimi K2.6 已完成 15 场景真实模型评测。独立 Netlify 静态专题已上线并完成 HTTPS、SPA 回退、CDN 资源与安全响应头验证；它不连接可写后端。Render Blueprint、migration-on-start 和 CORS 已配置，公网容器仍在部署授权阶段。
+本地已验证 SQLite、51 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。Neon `fieldpilot` 数据库已迁移到 head；Kimi K2.6 已完成 15 场景真实模型评测。Netlify 根路径承载项目专题，`/workbench` 调用 Render Docker/FastAPI；公网 health/ready、R1/R2 smoke、精确 CORS、Neon 持久化和 Render 重启恢复均已验证。公开环境仍使用 Mock LLM 与 Fixture Provider，不具备真实预订、生产限流、多租户隔离或 SLA。
