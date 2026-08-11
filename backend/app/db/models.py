@@ -54,11 +54,17 @@ class MissionRecord(Base):
         lazy="selectin",
         order_by="VisitTaskRecord.position",
     )
-    expense_policy: Mapped[ExpensePolicySnapshotRecord] = relationship(
+    legacy_expense_policy_projection: Mapped[ExpensePolicySnapshotRecord] = relationship(
         back_populates="mission",
         cascade="all, delete-orphan",
         lazy="selectin",
         uselist=False,
+    )
+    expense_policy_versions: Mapped[list[ExpensePolicyVersionRecord]] = relationship(
+        back_populates="mission",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="ExpensePolicyVersionRecord.sequence",
     )
     revisions: Mapped[list[PlanRevisionRecord]] = relationship(
         back_populates="mission",
@@ -86,6 +92,18 @@ class MissionRecord(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    @property
+    def expense_policy(self) -> ExpensePolicyVersionRecord | ExpensePolicySnapshotRecord:
+        """Return the immutable active policy snapshot.
+
+        ``expense_policy_snapshots`` is retained as the legacy initial projection so
+        existing databases can migrate without rewriting the original row. New
+        planning reads use the latest append-only version.
+        """
+        if self.expense_policy_versions:
+            return self.expense_policy_versions[-1]
+        return self.legacy_expense_policy_projection
 
 
 class VisitTaskRecord(Base):
@@ -136,7 +154,42 @@ class ExpensePolicySnapshotRecord(Base):
         DateTime(timezone=True), default=utc_now
     )
 
-    mission: Mapped[MissionRecord] = relationship(back_populates="expense_policy")
+    mission: Mapped[MissionRecord] = relationship(
+        back_populates="legacy_expense_policy_projection"
+    )
+
+
+class ExpensePolicyVersionRecord(Base):
+    __tablename__ = "expense_policy_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "mission_id", "sequence", name="uq_expense_policy_version_sequence"
+        ),
+        UniqueConstraint("source_event_id", name="uq_expense_policy_source_event"),
+    )
+
+    snapshot_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    mission_id: Mapped[str] = mapped_column(
+        ForeignKey("missions.mission_id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+    based_on_snapshot_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    source_event_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    policy_id: Mapped[str] = mapped_column(String(80))
+    policy_version: Mapped[str] = mapped_column(String(40))
+    allowed_rail_classes: Mapped[list[str]] = mapped_column(JSON)
+    allowed_flight_classes: Mapped[list[str]] = mapped_column(JSON)
+    hotel_nightly_cap_yuan: Mapped[int] = mapped_column(Integer)
+    meal_daily_cap_yuan: Mapped[int] = mapped_column(Integer)
+    local_transport_daily_cap_yuan: Mapped[int] = mapped_column(Integer)
+    trip_total_cap_yuan: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+
+    mission: Mapped[MissionRecord] = relationship(
+        back_populates="expense_policy_versions"
+    )
 
 
 class PlanRevisionRecord(Base):

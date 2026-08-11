@@ -30,4 +30,5 @@ async def readiness_check(
         "local_route_provider": settings.local_route_provider,
         "amap_key_configured": bool(settings.amap_api_key),
         "llm_key_configured": bool(settings.openai_api_key),
+        "manual_inventory_configured": bool(settings.manual_candidate_file),
     }

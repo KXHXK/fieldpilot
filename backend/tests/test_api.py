@@ -25,6 +25,7 @@ async def test_readiness_checks_database() -> None:
         "local_route_provider": "fixture",
         "amap_key_configured": False,
         "llm_key_configured": False,
+        "manual_inventory_configured": False,
     }
 
 

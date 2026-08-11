@@ -31,11 +31,12 @@ def normalize_database_url(value: str) -> str:
 
 class Settings(BaseSettings):
     app_name: str = "FieldPilot API"
-    app_version: str = "0.5.0-dev"
+    app_version: str = "0.6.0"
     use_mock_llm: bool = True
     amap_api_key: str = ""
     amap_base_url: str = "https://restapi.amap.com"
     local_route_provider: Literal["fixture", "amap"] = "fixture"
+    manual_candidate_file: str = ""
     provider_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     provider_max_retries: int = Field(default=1, ge=0, le=3)
     provider_max_concurrency: int = Field(default=4, ge=1, le=10)

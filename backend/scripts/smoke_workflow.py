@@ -163,6 +163,103 @@ def run(base_url: str) -> dict:
         comparison_response.raise_for_status()
         comparison = comparison_response.json()
 
+        budget_event_id = f"smoke-budget-{run_id}"
+        budget_event = post(
+            client,
+            f"/v1/missions/{mission_id}/events",
+            {
+                "event_id": budget_event_id,
+                "event_type": "budget_changed",
+                "based_on_revision": 2,
+                "payload": {"trip_total_cap_yuan": 1800},
+            },
+        )
+        third = post(
+            client,
+            f"/v1/missions/{mission_id}/plans",
+            {
+                "request_id": f"smoke-plan-r3-{run_id}",
+                "based_on_revision": 2,
+                "input_event_id": budget_event_id,
+            },
+        )
+        post(
+            client,
+            f"/v1/missions/{mission_id}/revisions/3/activate",
+            {"expected_active_revision": 2},
+        )
+
+        third_option = preferred_option(third)
+        disrupted_segment = next(
+            segment
+            for segment in third_option["segments"]
+            if segment["segment_type"] == "intercity_transport"
+            and segment["metadata"].get("direction") == "return"
+        )
+        disruption_event_id = f"smoke-disruption-{run_id}"
+        disruption_event = post(
+            client,
+            f"/v1/missions/{mission_id}/events",
+            {
+                "event_id": disruption_event_id,
+                "event_type": "transport_disruption",
+                "based_on_revision": 3,
+                "payload": {
+                    "provider": disrupted_segment["provider"],
+                    "candidate_id": disrupted_segment["candidate_id"],
+                    "status": "cancelled",
+                },
+            },
+        )
+        fourth = post(
+            client,
+            f"/v1/missions/{mission_id}/plans",
+            {
+                "request_id": f"smoke-plan-r4-{run_id}",
+                "based_on_revision": 3,
+                "input_event_id": disruption_event_id,
+            },
+        )
+        post(
+            client,
+            f"/v1/missions/{mission_id}/revisions/4/activate",
+            {"expected_active_revision": 3},
+        )
+
+        weather_event_id = f"smoke-weather-{run_id}"
+        weather_event = post(
+            client,
+            f"/v1/missions/{mission_id}/events",
+            {
+                "event_id": weather_event_id,
+                "event_type": "weather_risk",
+                "based_on_revision": 4,
+                "payload": {
+                    "location": mission["visits"][1]["location"]["city"],
+                    "severity": "high",
+                    "affected_task_ids": [mission["visits"][1]["task_id"]],
+                    "summary": "smoke: high weather risk",
+                },
+            },
+        )
+        fifth = post(
+            client,
+            f"/v1/missions/{mission_id}/plans",
+            {
+                "request_id": f"smoke-plan-r5-{run_id}",
+                "based_on_revision": 4,
+                "input_event_id": weather_event_id,
+            },
+        )
+        post(
+            client,
+            f"/v1/missions/{mission_id}/revisions/5/activate",
+            {"expected_active_revision": 4},
+        )
+        loaded_mission_response = client.get(f"/v1/missions/{mission_id}")
+        loaded_mission_response.raise_for_status()
+        loaded_mission = loaded_mission_response.json()
+
     second_option = preferred_option(second)
     protected_ids = set(execution["protected_segment_ids"])
     first_protected = {
@@ -178,8 +275,29 @@ def run(base_url: str) -> dict:
         "service_version": health.json()["version"],
         "agent_mode": interpreted["trace"]["mode"],
         "mission_id": mission_id,
-        "revisions": [first["revision"], second["revision"]],
-        "event_application": event["application_status"],
+        "revisions": [
+            first["revision"],
+            second["revision"],
+            third["revision"],
+            fourth["revision"],
+            fifth["revision"],
+        ],
+        "event_applications": {
+            "task_rescheduled": event["application_status"],
+            "budget_changed": budget_event["application_status"],
+            "transport_disruption": disruption_event["application_status"],
+            "weather_risk": weather_event["application_status"],
+        },
+        "policy_snapshot_sequence": loaded_mission["expense_policy"][
+            "snapshot_sequence"
+        ],
+        "policy_snapshot_bound_to_r3": third["bundle"]["policy_snapshot_id"]
+        == loaded_mission["expense_policy"]["snapshot_id"],
+        "disrupted_candidate_excluded": all(
+            segment.get("candidate_id") != disrupted_segment["candidate_id"]
+            for option in fourth["bundle"]["options"]
+            for segment in option["segments"]
+        ),
         "execution_version": completion["version"],
         "protected_segment_count": len(protected_ids),
         "protected_prefix_unchanged": all(

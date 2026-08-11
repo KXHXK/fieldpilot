@@ -27,7 +27,7 @@ const timeline = {
 const currentTimeline = computed(() => timeline[revision.value]);
 
 const evidence = [
-  ["51 passed", "后端全量回归"],
+  ["55 passed", "后端全量回归"],
   ["15 / 15", "Kimi Live Eval"],
   ["V2", "执行检查点"],
   ["6 / 11", "变化段 / 保持段"]
@@ -72,15 +72,14 @@ const stack = [
 
     <header id="top" class="showcase-hero">
       <div class="hero-copy">
-        <p class="eyebrow">FIELD MISSION ORCHESTRATION · LIVE SYSTEM</p>
-        <h1>把出差要求，<br /><em>变成可执行行程。</em></h1>
+        <p class="eyebrow">FIELD MISSION ORCHESTRATION</p>
+        <h1>外勤任务，<em>可靠编排</em></h1>
         <p class="hero-summary">
-          FieldPilot 面向跨省市外勤场景。类型化语义 Harness 把不可信口语转成可确认的 MissionDraft；确定性规划内核再把地点、任务时间窗、紧密程度与报销规则转成可验证的交通、住宿、餐饮和多点任务方案。
+          自然语言形成 MissionDraft；确定性规划、Policy 与 Verifier 负责任务、行程、报销和动态重规划。
         </p>
         <div class="hero-actions">
           <a class="button primary" href="/workbench">打开在线工作台</a>
-          <a class="button secondary" href="#flow">查看 90 秒链路</a>
-          <a class="button secondary" href="https://github.com/KXHXK/fieldpilot/blob/main/docs/architecture.md" target="_blank" rel="noreferrer">阅读架构取舍</a>
+          <a class="button secondary" href="#flow">查看工程链路</a>
         </div>
       </div>
       <aside class="mission-card" aria-label="示例任务摘要">
@@ -104,7 +103,7 @@ const stack = [
     <section id="flow" class="showcase-section flow-section">
       <div class="section-heading">
         <p class="kicker">CHECKPOINTED REPLANNING</p>
-        <h2>已执行的不能被重写，<br />变化只发生在后缀。</h2>
+        <h2>已执行前缀保持不变</h2>
         <p>锁定首个现场任务后，第二个任务发生改期。Planner 从检查点的时间、位置和累计成本恢复搜索，Verifier 再逐段确认受保护前缀。</p>
       </div>
 
@@ -143,7 +142,7 @@ const stack = [
     <section id="architecture" class="showcase-section architecture-section">
       <div class="section-heading compact">
         <p class="kicker">DETERMINISTIC CORE</p>
-        <h2>模型解释意图，<br />代码决定能否执行。</h2>
+        <h2>模型理解意图，代码决定执行</h2>
       </div>
       <div class="architecture-flow" aria-label="系统架构链路">
         <div><span>01</span><strong>Vue Workbench</strong><small>输入 / 时间线 / Diff</small></div><i>→</i>
@@ -161,7 +160,7 @@ const stack = [
       <div class="section-heading harness-heading">
         <div>
           <p class="kicker">TYPED SEMANTIC HARNESS</p>
-          <h2>限制模型能做什么，<br />再让业务代码决定能否执行。</h2>
+          <h2>约束模型入口，确定业务边界</h2>
         </div>
         <p>Harness 不是第二个规划器，也不把交通工具交给模型。它只管理自然语言入口的契约、调用预算、确定性护栏、失败降级、幂等和审计；用户确认后才进入 Provider、Planner、Policy 与 Verifier。</p>
       </div>
@@ -201,7 +200,7 @@ const stack = [
       <div class="eval-story">
         <div class="eval-copy">
           <p class="kicker">EVAL-DRIVEN HARDENING</p>
-          <h3>不是“模型一次跑通”，而是用失败样本收紧 Harness。</h3>
+          <h3>用失败样本收紧 Harness</h3>
           <p>15 个固定场景覆盖完整输入、缺失信息、单一交通方式、精确报销字段、任务时窗和 Prompt Injection。只有 Live 调用进入质量分数，任何 fallback 都会让工作流失败。</p>
           <small>最终轮次：15/15 live · P50/P95 16.91/26.92 s · 22,788 tokens</small>
         </div>
@@ -217,13 +216,13 @@ const stack = [
     <section id="evidence" class="showcase-section evidence-section">
       <div class="section-heading compact">
         <p class="kicker">VERIFIED DELIVERY</p>
-        <h2>每个结论都有可复核证据。</h2>
+        <h2>结论均有复核证据</h2>
       </div>
       <div class="evidence-grid">
         <article><span>API & DATABASE</span><strong>幂等、版本冲突与迁移往返</strong><p>ExecutionCommand 保存命令指纹；expected_version 防止并发覆盖；Alembic 0004 可升级、检查和回退。</p></article>
         <article><span>PLANNING</span><strong>受保护前缀逐字段一致</strong><p>HTTP 冒烟输出 protected_prefix_unchanged=true；Verifier 测试覆盖删除、篡改和越界。</p></article>
         <article><span>FRONTEND</span><strong>真实浏览器主链路</strong><p>R1 → lock V1 → event → R2 → complete V2；已完成任务禁用，控制台无 warning/error。</p></article>
-        <article><span>DELIVERY</span><strong>GitHub main CI success</strong><p>后端 51 项测试、迁移 schema check 与 Vue TypeScript/Vite production build 均通过。</p></article>
+        <article><span>DELIVERY</span><strong>发布候选已本地验收</strong><p>后端 55 项测试、迁移 schema check、工作台与专题页两种 Vue TypeScript/Vite production build 均通过；合并后由 main CI 复验。</p></article>
         <article><span>PUBLIC RUNTIME</span><strong>Render + Neon 重启恢复通过</strong><p>公网 smoke 覆盖 R1、事件式 R2、执行检查点和严格前缀保留；服务重启后仍可读取 Mission、Revision 与 Event。</p></article>
       </div>
       <div class="evidence-actions">
@@ -238,7 +237,7 @@ const stack = [
     <section id="boundary" class="showcase-section boundary-section">
       <div>
         <p class="kicker">HONEST BOUNDARY</p>
-        <h2>可在线体验完整编排，<br />但不冒充真实预订平台。</h2>
+        <h2>可体验编排，不冒充预订平台</h2>
       </div>
       <div class="boundary-copy">
         <p>公开工作台连接 FastAPI 与 PostgreSQL，可实际写入任务、生成修订、推进检查点并触发事件式重规划。演示环境不暴露模型、地图或数据库凭据，外部事实来源会在页面逐段标记。</p>
@@ -257,7 +256,7 @@ const stack = [
       </div>
     </section>
 
-    <footer class="showcase-footer"><span>FieldPilot · 0.5.0-dev</span><b>EXPLAINABLE · REPLANNABLE · AUDITABLE</b><span>2026</span></footer>
+    <footer class="showcase-footer"><span>FieldPilot · 0.6.0</span><b>EXPLAINABLE · REPLANNABLE · AUDITABLE</b><span>2026</span></footer>
   </main>
 </template>
 
@@ -268,4 +267,123 @@ const stack = [
 .harness-section{position:relative}.harness-heading{align-items:start}.harness-boundary{display:grid;gap:18px;padding:28px;background:#fff;border:1px solid #d4ded7;border-radius:22px;box-shadow:0 20px 60px rgba(23,63,48,.07)}.harness-lane{display:grid;grid-template-columns:minmax(130px,.8fr) repeat(7,auto);gap:10px;align-items:center}.harness-lane.business-lane{grid-template-columns:minmax(130px,.8fr) repeat(9,auto)}.lane-label{align-self:stretch;display:flex;align-items:center;padding:12px;color:#1c694a;background:#e7f0ea;border-radius:11px;font-size:9px;font-weight:800;letter-spacing:.11em}.harness-node{min-width:122px;padding:16px 13px;background:#f3f5f2;border:1px solid #d9e0da;border-radius:12px;font-size:11px;font-weight:800;line-height:1.5}.harness-node small{color:#718078;font-size:8px;font-weight:600}.harness-node.accent{color:#fff;background:#174e39;border-color:#174e39}.harness-node.accent small{color:#b9d4c5}.harness-lane i{color:#8aa096;font-style:normal}.boundary-gate{display:flex;align-items:center;justify-content:center;gap:14px;color:#d45d39;font-size:9px;font-weight:800;letter-spacing:.12em}.boundary-gate b{font-size:17px}.harness-layer-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.harness-layer-grid article{padding:22px;background:#173f30;border-radius:15px;color:#edf6ef}.harness-layer-grid span{color:#c8ee55;font-size:9px;font-weight:800}.harness-layer-grid strong{display:block;margin-top:10px;font-size:14px}.harness-layer-grid p{margin:8px 0 0;color:#adc4b7;font-size:10px;line-height:1.7}.eval-story{display:grid;grid-template-columns:.85fr 1.15fr;gap:28px;margin-top:18px;padding:28px;background:#eef2ed;border-radius:20px}.eval-copy h3{margin:0;font-size:25px;line-height:1.22}.eval-copy>p:not(.kicker){color:#647169;font-size:11px;line-height:1.75}.eval-copy small{color:#1c694a;font-size:9px;font-weight:800}.eval-table{display:grid;align-content:center;min-width:0;overflow-x:auto}.eval-row{display:grid;grid-template-columns:1.7fr repeat(4,.65fr);min-width:530px;border-bottom:1px solid #d2dcd4}.eval-row>*{padding:11px 8px;font-size:10px;text-align:right}.eval-row>*:first-child{text-align:left}.eval-row b{color:#1c694a}.eval-head{color:#78847c;font-size:8px;font-weight:800;letter-spacing:.06em}.eval-head>*{font-size:8px}.eval-row:last-child{border-bottom:0}
 @media(max-width:900px){.harness-lane,.harness-lane.business-lane{grid-template-columns:1fr}.harness-lane i{justify-self:center;transform:rotate(90deg)}.harness-layer-grid{grid-template-columns:repeat(2,1fr)}.eval-story{grid-template-columns:1fr}}
 @media(max-width:560px){.harness-boundary,.eval-story{padding:19px}.harness-layer-grid{grid-template-columns:1fr}.harness-node{min-width:0}.eval-copy h3{font-size:21px}}
+.showcase-hero {
+  grid-template-columns: 1.2fr .8fr;
+  gap: clamp(40px, 6vw, 72px);
+  min-height: 0;
+  padding: clamp(56px, 7vw, 88px) 0;
+}
+
+.showcase-hero h1 {
+  max-width: 15ch;
+  font-size: clamp(36px, 4.2vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -.045em;
+}
+
+.hero-summary {
+  max-width: 620px;
+  margin-top: 24px;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.hero-actions {
+  margin-top: 28px;
+}
+
+.mission-card {
+  padding: 28px;
+  border-radius: 20px;
+}
+
+.mission-card > strong {
+  font-size: 26px;
+}
+
+.route-line {
+  margin: 22px 0;
+}
+
+.showcase-section {
+  padding: clamp(72px, 8vw, 96px) 0;
+}
+
+.section-heading h2 {
+  font-size: clamp(30px, 4vw, 50px);
+  line-height: 1.12;
+  letter-spacing: -.04em;
+}
+
+.boundary-section h2 {
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.12;
+  letter-spacing: -.04em;
+}
+
+/* Supporting labels remain compact, but never fall into unreadable micro type. */
+.showcase-nav > div,
+.button,
+.eyebrow,
+.kicker { font-size: 13px; }
+.source-link,
+.card-label,
+.mission-card dt,
+.fact-strip span,
+.trace-steps li > span,
+.timeline-card header span,
+.revision-tabs button,
+.showcase-timeline time,
+.showcase-timeline p,
+.timeline-card > footer,
+.architecture-flow span,
+.architecture-flow small,
+.stack-grid p,
+.evidence-grid span,
+.evidence-actions a,
+.showcase-footer,
+.lane-label,
+.harness-node,
+.boundary-gate,
+.harness-layer-grid span,
+.harness-layer-grid p,
+.eval-copy > p:not(.kicker),
+.eval-copy small,
+.eval-row > *,
+.eval-head,
+.eval-head > * { font-size: 12px; }
+.showcase-timeline span,
+.harness-node small { font-size: 11px; }
+.evidence-grid p { font-size: 13px; }
+
+.showcase-nav {
+  isolation: isolate;
+  border-bottom: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.showcase-nav::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(50% - 50vw);
+  z-index: -1;
+  border-bottom: 1px solid #d9dfd8;
+  background: rgba(244, 246, 241, .92);
+  backdrop-filter: blur(12px);
+}
+
+@media(max-width: 560px) {
+  .showcase-hero {
+    grid-template-columns: 1fr;
+    gap: 42px;
+    padding: 56px 0;
+  }
+
+  .showcase-hero h1 {
+    font-size: 34px;
+    white-space: nowrap;
+  }
+}
 </style>

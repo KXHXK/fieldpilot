@@ -181,6 +181,9 @@ class VisitTaskRead(StrictModel):
 
 class ExpensePolicyRead(ExpensePolicyInput):
     snapshot_id: str
+    snapshot_sequence: int = Field(default=1, ge=1)
+    based_on_snapshot_id: str | None = None
+    source_event_id: str | None = None
 
 
 class MissionRead(StrictModel):

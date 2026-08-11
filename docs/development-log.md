@@ -357,3 +357,16 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 新增 `docs/agent-harness.md`，用可追溯的代码映射说明 Harness 组成、上下文生命周期、Provider 治理、完整业务运行过程、失败降级、审计链和当前未验证边界。
 - 公网项目专题增加双层技术架构、四层 Harness 组成和三轮真实 Kimi Eval 对照；同时明确公开工作台使用 Mock LLM/Fixture Provider，真实模型指标来自独立 no-fallback 工作流。
 - 将上述已验证事实正式移交“简历制定”和“作品集网站”任务；简历与总作品集只引用最终真实轮次，不把单次调用写成稳定率，也不声称多 Agent、MCP、RAG 或真实预订。
+
+## 2026-08-10｜Stage 16：0.6.0 核心业务收口
+
+- 从 `main@134d436` 建立 `release/fieldpilot-closure-20260810`，保留工作区已有的前端文案、可读性、运行模式和数据边界改进；未删除或覆盖用户改动。
+- 新增 Alembic `20260810_0005` 与 `ExpensePolicyVersionRecord`。初始政策和预算事件形成 sequence、parent snapshot、source event 的追加式版本链；旧投影不再被预算事件覆盖，PlanBundle 记录 `policy_snapshot_id`。
+- 新增 `EventAwareCandidateProvider`：交通取消/不可用排除指定候选，延误平移起止时间并降低可靠性；高风险天气过滤受影响任务的步行和骑行，中风险过滤骑行；过滤命中和规则写入 `event_candidate_filter` 快照。
+- 新增严格的授权人工库存导入：铁路、航班和酒店候选从本地 JSON Schema 加载，来源强制覆盖为 `manual`，保存导入 ID、数量与 SHA-256 内容指纹；不调用或抓取未授权票务接口。
+- 工作台增加任务改期、预算变化、交通中断和天气风险四类事件输入，展示当前不可变政策快照版本；专题页和运行边界文案提高可读性并明确公开数据模式。
+- 新增高德最小真实路线/餐饮验收脚本与手动 Actions 工作流。凭证只来自 secret，artifact 只保留能力、模式、指纹、时间和计数，不保存 Key、完整 URL 或原始 Provider 响应。
+- 本地后端回归增至 `55 passed`；Alembic upgrade/check/downgrade/re-upgrade 通过，最终 head 为 `20260810_0005`；工作台与 showcase 两种 Vue TypeScript/Vite 生产构建通过。
+- 公网只读复核确认 Netlify 首页/工作台均为 200，Render health/ready 可用；线上仍为 `0.5.0-dev`、Mock LLM、Fixture Provider，未把本地 `0.6.0` 能力误记为已发布。
+- 本地启动真实 Uvicorn HTTP 进程执行扩展 smoke，依次生成 R1～R5，覆盖任务改期、预算快照、交通取消和天气风险；四类事件均为 `applied`，政策快照序列为 2，R3 绑定当前快照，取消候选未进入 R4，且检查点受保护前缀逐段不变。
+- 当前仍是本地发布候选。Neon `0005`、Render `0.6.0`、Netlify 新产物、生产 smoke 和真实高德 Key 验收均保留到人工审批后执行，未把本地证据写成公网事实。

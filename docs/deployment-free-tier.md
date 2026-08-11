@@ -38,11 +38,11 @@ Invoke-RestMethod "$apiBase/api/health"
 Invoke-RestMethod "$apiBase/api/ready"
 ```
 
-随后用 `backend/scripts/smoke_workflow.py --base-url <URL>`（脚本支持该参数后）跑完整写入链路，并在 Render 手动重启后读取既有 Mission/Revision/Event，证明数据不依赖临时文件系统。最后发送 `Origin: https://fieldpilot-kxh.netlify.app` 请求，确认仅该生产 origin 获得 CORS 响应。
+随后用 `backend/scripts/smoke_workflow.py --base-url <URL>` 跑完整写入链路，并在 Render 手动重启后读取既有 Mission/Revision/Event，证明数据不依赖临时文件系统。最后发送 `Origin: https://fieldpilot-kxh.netlify.app` 请求，确认仅该生产 origin 获得 CORS 响应。
 
 ## 当前状态
 
-截至 2026-08-02，三层免费拓扑已上线：Netlify 项目站与工作台为 <https://fieldpilot-kxh.netlify.app/> 和 `/workbench`，Render API 为 <https://fieldpilot-api-t7m6.onrender.com>，数据进入 Neon `fieldpilot` PostgreSQL。初始生产容器部署 commit 为 `bc53426`，Netlify 生产 deploy 为 `6a6f13259646109fe6f02be6`。
+截至 2026-08-10，三层免费拓扑的上一版已上线：Netlify 项目站与工作台为 <https://fieldpilot-kxh.netlify.app/> 和 `/workbench`，Render API 为 <https://fieldpilot-api-t7m6.onrender.com>，数据进入 Neon `fieldpilot` PostgreSQL。初始生产容器部署 commit 为 `bc53426`，当前已记录的 Netlify 生产 deploy 为 `6a6f2177f207a9dccf2184db`。`0.6.0` 仍是发布候选，需合并后迁移并复验。
 
 已取得的上线证据：
 
@@ -52,4 +52,4 @@ Invoke-RestMethod "$apiBase/api/ready"
 - 生产 Netlify origin 获得精确 CORS 许可；随机 Deploy Preview origin 被拒绝。工作台真实浏览器显示 `API ok` 并完成杭州示例 Agent 解析。
 - 数据库 owner 凭证在发布后完成轮换，旧凭证失效；仓库、文档和命令输出均不记录连接串。
 
-免费层边界仍然存在：Render 空闲时可能冷启动；公开环境没有多租户认证和生产限流；高德真实 Key 未验收，铁路、航班与酒店仍是显式 Fixture。因此这是可交互工程演示环境，不承担真实预订或生产 SLA。
+免费层边界仍然存在：Render 空闲时可能冷启动；公开环境没有多租户认证和生产限流；高德真实 Key 未验收。`0.6.0` 已支持铁路、航班与酒店的授权人工候选导入，但公开环境仍使用显式 Fixture。因此这是可交互工程演示环境，不承担真实预订或生产 SLA。
