@@ -4,7 +4,7 @@
 
 - [已完成] 本地与 main CI 的 55 项测试、Alembic `20260810_0005` 往返、工作台与专题页双构建通过。
 - [已完成] PR #15 合并，Neon/Render/Netlify 发布，R1～R5 smoke、政策版本、CORS、SPA/CSP 和浏览器主链路通过。
-- [发布后复核] 通过证据提交触发服务重启后，再读取生产 smoke Mission，确认 `0.6.0` 的持久化恢复。
+- [已完成] 证据 PR #16 合并后服务发生冷启动；再次读取生产 smoke Mission，确认 R1～R5、两版政策和执行检查点均从 Neon 恢复。
 - [待外部凭证] 使用独立高德 Web Service Key 运行 `fieldpilot-amap-provider-validation`，保存不含密钥和原始响应的脱敏报告。
 - [可选] 只有产品确实需要交互地图时才配置浏览器 Web JS Key 与安全码。
 
