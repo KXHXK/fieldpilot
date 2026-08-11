@@ -63,16 +63,17 @@ Policy Engine 先过滤席别、舱位和单项上限，并对整单成本给出
 - Activation：调用方提交 `expected_active_revision`，过期写入返回 409。
 - Event：事件 ID、类型、基线和 payload 必须完全一致才算重放。
 - Execution：`command_id` 负责命令幂等，`expected_version` 负责乐观并发；锁定和完成边界只能沿首选时间线单调前进。
-- Applied events：任务改期/取消/新增/延长、预算和偏好在同一事务内修改事实并保存 before/after 字段。
-- Recorded-only events：天气与交通中断会留痕，但在候选过滤能力接入前不会标记为已应用。
+- Applied fact events：任务改期/取消/新增/延长和偏好在同一事务内修改事实并保存 before/after 字段。
+- Immutable policy events：预算变化追加新的政策快照；旧版本不覆盖，PlanRevision 绑定实际使用的快照 ID。
+- Candidate-filter events：交通取消/不可用排除指定候选，延误平移候选时间并降低可靠性；天气风险按任务过滤步行/骑行，规则结果进入独立 ProviderSnapshot。
 - Revision diff：比较首选方案的稳定任务/候选身份，返回新增、删除、变化、保留段数，以及成本、评分和告警增量。
 
 存在执行检查点时，Planner 以激活修订中的受保护段作为不可变前缀，从锁定段的结束时间和位置恢复搜索状态，只对后续任务、交通、住宿与餐饮进行求解。受保护任务从待规划集合移除，已锁定酒店与步行/换乘/成本状态继续传入后缀搜索；Verifier 会逐段比较前缀内容、确认恢复段存在，并拒绝任何越过检查点的后缀。该能力保证“前缀不变、后缀可重算”，但有界 Beam Search 仍是可解释启发式规划，不声称全局最优。
 
 ## 7. 数据与可观测性
 
-SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicy、PlanRevision、ProviderSnapshot、ReplanEvent、AgentRun、ExecutionCheckpoint 和 ExecutionCommand。ExecutionCheckpoint 保存来源修订、锁定/完成边界及受保护段；ExecutionCommand 保存命令指纹与结果，用于安全重放。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。路线与餐饮快照保存查询指纹、归一化候选、来源和安全的 HTTP 事件摘要，不保存 API Key、带 Key 的完整 URL 或原始 Provider 响应。
+SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicyVersion、PlanRevision、ProviderSnapshot、ReplanEvent、AgentRun、ExecutionCheckpoint 和 ExecutionCommand。政策版本以 sequence、parent snapshot 和 source event 形成不可变链；ExecutionCheckpoint 保存来源修订、锁定/完成边界及受保护段；ExecutionCommand 保存命令指纹与结果，用于安全重放。AgentRun 不保存自由文本原文，只保存 SHA-256 指纹、结构化输出、模型/Prompt 版本、用量、延迟和失败类别。路线、餐饮、人工库存和事件过滤快照保存查询指纹、归一化来源及安全摘要，不保存 API Key、带 Key 的完整 URL 或原始 Provider 响应。
 
 ## 8. 交付边界
 
-本地已验证 SQLite、51 项 Pytest、Alembic `20260731_0004` 往返、运行中 HTTP 冒烟、真实浏览器执行检查点/后缀重规划链路与 Vue 生产构建。Neon `fieldpilot` 数据库已迁移到 head；Kimi K2.6 已完成 15 场景真实模型评测。Netlify 根路径承载项目专题，`/workbench` 调用 Render Docker/FastAPI；公网 health/ready、R1/R2 smoke、精确 CORS、Neon 持久化和 Render 重启恢复均已验证。公开环境仍使用 Mock LLM 与 Fixture Provider，不具备真实预订、生产限流、多租户隔离或 SLA。
+本地 `0.6.0` 已验证 SQLite、55 项 Pytest、Alembic `20260810_0005` 往返、不可变政策版本、授权人工库存、风险候选过滤，以及工作台/专题页两种 Vue 生产构建。上一版 Neon、Render Docker/FastAPI 与 Netlify 已完成 health/ready、R1/R2 smoke、精确 CORS、持久化和重启恢复验证；Kimi K2.6 已完成 15 场景真实模型评测。公开环境继续使用 Mock LLM 与 Fixture Provider；`0.6.0` 公网升级需在发布审批后复验，不具备真实预订、生产限流、多租户隔离或 SLA。

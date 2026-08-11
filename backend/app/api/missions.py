@@ -6,6 +6,7 @@ from app.domain import (
     ActivateRevisionRequest,
     ExecutionCheckpointCommand,
     ExecutionCheckpointRead,
+    ExpensePolicyRead,
     MissionCreate,
     MissionRead,
     PlanGenerationRequest,
@@ -29,6 +30,7 @@ from app.services.mission_service import (
     RevisionConflictError,
     create_mission,
     get_mission,
+    list_expense_policy_versions,
     record_replan_event,
 )
 from app.services.planning_service import (
@@ -62,6 +64,20 @@ async def get_mission_endpoint(
 ) -> MissionRead:
     try:
         return await get_mission(session, mission_id)
+    except MissionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在") from exc
+
+
+@router.get(
+    "/{mission_id}/expense-policy/versions",
+    response_model=list[ExpensePolicyRead],
+)
+async def list_expense_policy_versions_endpoint(
+    mission_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> list[ExpensePolicyRead]:
+    try:
+        return await list_expense_policy_versions(session, mission_id)
     except MissionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="任务不存在") from exc
 

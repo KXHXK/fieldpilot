@@ -11,7 +11,9 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models import (
     ExpensePolicySnapshotRecord,
+    ExpensePolicyVersionRecord,
     MissionRecord,
+    PlanRevisionRecord,
     ReplanEventRecord,
     VisitTaskRecord,
 )
@@ -37,6 +39,8 @@ from app.domain.mission import (
     TaskCancelledPayload,
     TaskExtendedPayload,
     TaskRescheduledPayload,
+    TransportDisruptionPayload,
+    WeatherRiskPayload,
 )
 
 
@@ -77,7 +81,9 @@ def _mission_query(mission_id: str):
         .where(MissionRecord.mission_id == mission_id)
         .options(
             selectinload(MissionRecord.visits),
-            selectinload(MissionRecord.expense_policy),
+            selectinload(MissionRecord.legacy_expense_policy_projection),
+            selectinload(MissionRecord.expense_policy_versions),
+            selectinload(MissionRecord.execution_checkpoint),
         )
     )
 
@@ -125,8 +131,9 @@ async def create_mission(
         for position, visit in enumerate(command.visits, start=1)
     ]
     policy = command.expense_policy
-    mission.expense_policy = ExpensePolicySnapshotRecord(
-        snapshot_id=_new_id("pol"),
+    initial_snapshot_id = _new_id("pol")
+    mission.legacy_expense_policy_projection = ExpensePolicySnapshotRecord(
+        snapshot_id=initial_snapshot_id,
         mission_id=mission_id,
         policy_id=policy.policy_id,
         policy_version=policy.policy_version,
@@ -137,6 +144,23 @@ async def create_mission(
         local_transport_daily_cap_yuan=policy.local_transport_daily_cap_yuan,
         trip_total_cap_yuan=policy.trip_total_cap_yuan,
     )
+    mission.expense_policy_versions = [
+        ExpensePolicyVersionRecord(
+            snapshot_id=initial_snapshot_id,
+            mission_id=mission_id,
+            sequence=1,
+            based_on_snapshot_id=None,
+            source_event_id=None,
+            policy_id=policy.policy_id,
+            policy_version=policy.policy_version,
+            allowed_rail_classes=policy.allowed_rail_classes,
+            allowed_flight_classes=policy.allowed_flight_classes,
+            hotel_nightly_cap_yuan=policy.hotel_nightly_cap_yuan,
+            meal_daily_cap_yuan=policy.meal_daily_cap_yuan,
+            local_transport_daily_cap_yuan=policy.local_transport_daily_cap_yuan,
+            trip_total_cap_yuan=policy.trip_total_cap_yuan,
+        )
+    ]
     session.add(mission)
     await session.commit()
     return await get_mission(session, mission_id)
@@ -148,6 +172,20 @@ async def get_mission(session: AsyncSession, mission_id: str) -> MissionRead:
     if mission is None:
         raise MissionNotFoundError(mission_id)
     return _to_mission_read(mission)
+
+
+async def list_expense_policy_versions(
+    session: AsyncSession, mission_id: str
+) -> list[ExpensePolicyRead]:
+    mission = await session.get(MissionRecord, mission_id)
+    if mission is None:
+        raise MissionNotFoundError(mission_id)
+    result = await session.execute(
+        select(ExpensePolicyVersionRecord)
+        .where(ExpensePolicyVersionRecord.mission_id == mission_id)
+        .order_by(ExpensePolicyVersionRecord.sequence)
+    )
+    return [_to_policy_read(item) for item in result.scalars().all()]
 
 
 async def record_replan_event(
@@ -363,18 +401,118 @@ async def _apply_event(
     elif event_type == ReplanEventType.BUDGET_CHANGED:
         payload = BudgetChangedPayload.model_validate(command.payload)
         policy = mission.expense_policy
+        next_values = {
+            "policy_id": policy.policy_id,
+            "policy_version": policy.policy_version,
+            "allowed_rail_classes": list(policy.allowed_rail_classes),
+            "allowed_flight_classes": list(policy.allowed_flight_classes),
+            "hotel_nightly_cap_yuan": policy.hotel_nightly_cap_yuan,
+            "meal_daily_cap_yuan": policy.meal_daily_cap_yuan,
+            "local_transport_daily_cap_yuan": policy.local_transport_daily_cap_yuan,
+            "trip_total_cap_yuan": policy.trip_total_cap_yuan,
+        }
         for field, after in payload.model_dump().items():
             if after is None:
                 continue
-            before = getattr(policy, field)
-            setattr(policy, field, after)
+            before = next_values[field]
+            next_values[field] = after
             changes.append(_change(f"expense_policy.{field}", before, after))
+        next_snapshot = ExpensePolicyVersionRecord(
+            snapshot_id=_new_id("pol"),
+            mission_id=mission.mission_id,
+            sequence=getattr(policy, "sequence", 1) + 1,
+            based_on_snapshot_id=policy.snapshot_id,
+            source_event_id=command.event_id,
+            **next_values,
+        )
+        mission.expense_policy_versions.append(next_snapshot)
+        changes.append(
+            _change(
+                "expense_policy.snapshot_id",
+                policy.snapshot_id,
+                next_snapshot.snapshot_id,
+            )
+        )
     elif event_type == ReplanEventType.PREFERENCE_CHANGED:
         payload = PreferenceChangedPayload.model_validate(command.payload)
         before = mission.transport_preferences
         after = payload.transport_preferences.model_dump(mode="json")
         mission.transport_preferences = after
         changes.append(_change("transport_preferences", before, after))
+    elif event_type == ReplanEventType.TRANSPORT_DISRUPTION:
+        payload = TransportDisruptionPayload.model_validate(command.payload)
+        if mission.active_revision is None:
+            raise EventApplicationError(
+                "active_plan_required", "交通中断事件必须引用当前激活方案中的候选"
+            )
+        revision_result = await session.execute(
+            select(PlanRevisionRecord).where(
+                PlanRevisionRecord.mission_id == mission.mission_id,
+                PlanRevisionRecord.revision == mission.active_revision,
+            )
+        )
+        revision = revision_result.scalar_one_or_none()
+        if revision is None:
+            raise EventApplicationError(
+                "active_plan_not_found", "当前激活方案不存在"
+            )
+        bundle = revision.plan_payload
+        preferred_id = bundle.get("preferred_option_id")
+        preferred = next(
+            (
+                item
+                for item in bundle.get("options", [])
+                if item.get("option_id") == preferred_id
+            ),
+            None,
+        )
+        segment = next(
+            (
+                item
+                for item in (preferred or {}).get("segments", [])
+                if item.get("candidate_id") == payload.candidate_id
+            ),
+            None,
+        )
+        if segment is None or segment.get("provider") != payload.provider:
+            raise EventApplicationError(
+                "candidate_not_in_active_plan",
+                "交通中断候选与当前激活首选方案不一致",
+            )
+        protected_ids = {
+            item.get("segment_id")
+            for item in (
+                mission.execution_checkpoint.protected_segments
+                if mission.execution_checkpoint is not None
+                else []
+            )
+        }
+        if segment.get("segment_id") in protected_ids:
+            return EventApplicationStatus.RECORDED_ONLY, []
+        changes.append(
+            _change(
+                f"candidate_filters.transport.{payload.candidate_id}",
+                None,
+                {
+                    "provider": payload.provider,
+                    "status": payload.status,
+                    "estimated_delay_minutes": payload.estimated_delay_minutes,
+                },
+            )
+        )
+    elif event_type == ReplanEventType.WEATHER_RISK:
+        payload = WeatherRiskPayload.model_validate(command.payload)
+        changes.append(
+            _change(
+                f"candidate_filters.weather.{command.event_id}",
+                None,
+                {
+                    "location": payload.location,
+                    "severity": payload.severity,
+                    "affected_task_ids": payload.affected_task_ids,
+                },
+            )
+        )
     else:
         return EventApplicationStatus.RECORDED_ONLY, []
 
@@ -420,23 +558,32 @@ def _to_mission_read(mission: MissionRecord) -> MissionRead:
             )
             for visit in mission.visits
         ],
-        expense_policy=ExpensePolicyRead(
-            snapshot_id=policy.snapshot_id,
-            policy_id=policy.policy_id,
-            policy_version=policy.policy_version,
-            allowed_rail_classes=policy.allowed_rail_classes,
-            allowed_flight_classes=policy.allowed_flight_classes,
-            hotel_nightly_cap_yuan=policy.hotel_nightly_cap_yuan,
-            meal_daily_cap_yuan=policy.meal_daily_cap_yuan,
-            local_transport_daily_cap_yuan=policy.local_transport_daily_cap_yuan,
-            trip_total_cap_yuan=policy.trip_total_cap_yuan,
-        ),
+        expense_policy=_to_policy_read(policy),
         transport_preferences=TransportPreferences.model_validate(
             mission.transport_preferences
         ),
         notes=mission.notes,
         created_at=_as_utc(mission.created_at),
         updated_at=_as_utc(mission.updated_at),
+    )
+
+
+def _to_policy_read(
+    policy: ExpensePolicyVersionRecord | ExpensePolicySnapshotRecord,
+) -> ExpensePolicyRead:
+    return ExpensePolicyRead(
+        snapshot_id=policy.snapshot_id,
+        snapshot_sequence=getattr(policy, "sequence", 1),
+        based_on_snapshot_id=getattr(policy, "based_on_snapshot_id", None),
+        source_event_id=getattr(policy, "source_event_id", None),
+        policy_id=policy.policy_id,
+        policy_version=policy.policy_version,
+        allowed_rail_classes=policy.allowed_rail_classes,
+        allowed_flight_classes=policy.allowed_flight_classes,
+        hotel_nightly_cap_yuan=policy.hotel_nightly_cap_yuan,
+        meal_daily_cap_yuan=policy.meal_daily_cap_yuan,
+        local_transport_daily_cap_yuan=policy.local_transport_daily_cap_yuan,
+        trip_total_cap_yuan=policy.trip_total_cap_yuan,
     )
 
 

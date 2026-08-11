@@ -204,6 +204,7 @@ class PlanBundle(StrictModel):
     mission_id: str
     preferred_option_id: str
     options: list[PlanOption] = Field(min_length=1, max_length=3)
+    policy_snapshot_id: str | None = None
     provider_snapshot_ids: list[str]
     generated_at: datetime
     planner_version: str

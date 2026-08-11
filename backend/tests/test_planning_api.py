@@ -356,6 +356,48 @@ async def test_amap_mode_without_key_persists_honest_fallback_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_authorized_manual_inventory_enters_planning_with_manual_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import_path = (
+        Path(__file__).resolve().parents[2] / "examples" / "manual-inventory-v1.json"
+    )
+    monkeypatch.setattr(settings, "manual_candidate_file", str(import_path))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission = await create_mission(client)
+        response = await client.post(
+            f"/api/v1/missions/{mission['mission_id']}/plans",
+            json={"request_id": "plan-manual-inventory-001", "based_on_revision": None},
+        )
+
+    assert response.status_code == 201, response.text
+    revision = response.json()
+    intercity = [
+        segment
+        for option in revision["bundle"]["options"]
+        for segment in option["segments"]
+        if segment["segment_type"] == "intercity_transport"
+    ]
+    assert intercity
+    assert all(item["source_mode"] == "manual" for item in intercity)
+    assert all(item["candidate_id"].startswith("manual-") for item in intercity)
+    async with SessionFactory() as session:
+        snapshots = [
+            await session.get(ProviderSnapshotRecord, snapshot_id)
+            for snapshot_id in revision["bundle"]["provider_snapshot_ids"]
+        ]
+    manual_snapshot = next(
+        item
+        for item in snapshots
+        if item is not None
+        and item.capability == "manual_intercity_and_stay_inventory"
+    )
+    assert manual_snapshot.source_mode == "manual"
+    assert manual_snapshot.payload["content_sha256"]
+
+
+@pytest.mark.asyncio
 async def test_fixture_routes_are_stable_across_equivalent_mission_ids() -> None:
     payload = load_mission_payload()
     transport = httpx.ASGITransport(app=app)
@@ -420,3 +462,210 @@ async def test_fixture_routes_are_stable_across_equivalent_mission_ids() -> None
         item.estimated_cost_yuan for item in second_meals
     ]
     assert first_meals[0].anchor_ref != second_meals[0].anchor_ref
+
+
+@pytest.mark.asyncio
+async def test_transport_disruption_filters_candidate_and_persists_evidence() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission = await create_mission(client)
+        mission_id = mission["mission_id"]
+        first = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={"request_id": "plan-before-disruption-001", "based_on_revision": None},
+        )
+        assert first.status_code == 201, first.text
+        first_payload = first.json()
+        disrupted = next(
+            segment
+            for segment in first_payload["bundle"]["options"][0]["segments"]
+            if segment["segment_type"] == "intercity_transport"
+            and segment["metadata"].get("direction") == "outbound"
+        )
+        activated = await client.post(
+            f"/api/v1/missions/{mission_id}/revisions/1/activate",
+            json={"expected_active_revision": None},
+        )
+        assert activated.status_code == 200, activated.text
+        event = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-transport-cancel-001",
+                "event_type": "transport_disruption",
+                "based_on_revision": 1,
+                "payload": {
+                    "provider": disrupted["provider"],
+                    "candidate_id": disrupted["candidate_id"],
+                    "status": "cancelled",
+                },
+            },
+        )
+        assert event.status_code == 200, event.text
+        second = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={
+                "request_id": "plan-after-disruption-001",
+                "based_on_revision": 1,
+                "input_event_id": "evt-transport-cancel-001",
+            },
+        )
+
+    assert event.json()["application_status"] == "applied"
+    assert second.status_code == 201, second.text
+    second_payload = second.json()
+    assert second_payload["bundle"]["policy_snapshot_id"] == mission[
+        "expense_policy"
+    ]["snapshot_id"]
+    assert all(
+        segment.get("candidate_id") != disrupted["candidate_id"]
+        for option in second_payload["bundle"]["options"]
+        for segment in option["segments"]
+    )
+    async with SessionFactory() as session:
+        snapshots = [
+            await session.get(ProviderSnapshotRecord, snapshot_id)
+            for snapshot_id in second_payload["bundle"]["provider_snapshot_ids"]
+        ]
+    filter_snapshot = next(
+        item
+        for item in snapshots
+        if item is not None and item.capability == "event_candidate_filter"
+    )
+    assert filter_snapshot.source_mode == "manual"
+    assert filter_snapshot.payload["removed_candidate_ids"] == [
+        disrupted["candidate_id"]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_high_weather_filters_walking_for_affected_task() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission = await create_mission(client)
+        mission_id = mission["mission_id"]
+        first = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={"request_id": "plan-before-weather-001", "based_on_revision": None},
+        )
+        assert first.status_code == 201, first.text
+        activated = await client.post(
+            f"/api/v1/missions/{mission_id}/revisions/1/activate",
+            json={"expected_active_revision": None},
+        )
+        assert activated.status_code == 200, activated.text
+        affected_task_id = mission["visits"][1]["task_id"]
+        event = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-weather-filter-001",
+                "event_type": "weather_risk",
+                "based_on_revision": 1,
+                "payload": {
+                    "location": mission["visits"][1]["location"]["city"],
+                    "severity": "high",
+                    "affected_task_ids": [affected_task_id],
+                    "summary": "暴雨，避免步行与骑行",
+                },
+            },
+        )
+        assert event.status_code == 200, event.text
+        second = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={
+                "request_id": "plan-after-weather-001",
+                "based_on_revision": 1,
+                "input_event_id": "evt-weather-filter-001",
+            },
+        )
+
+    assert second.status_code == 201, second.text
+    payload = second.json()
+    assert all(
+        not (
+            segment["segment_type"] == "local_transport"
+            and segment["metadata"].get("mode") in {"walking", "bicycling"}
+            and affected_task_id in {segment.get("from_ref"), segment.get("to_ref")}
+        )
+        for option in payload["bundle"]["options"]
+        for segment in option["segments"]
+    )
+    async with SessionFactory() as session:
+        snapshots = [
+            await session.get(ProviderSnapshotRecord, snapshot_id)
+            for snapshot_id in payload["bundle"]["provider_snapshot_ids"]
+        ]
+    filter_snapshot = next(
+        item
+        for item in snapshots
+        if item is not None and item.capability == "event_candidate_filter"
+    )
+    assert "walking" in filter_snapshot.payload["filtered_modes"]
+
+
+@pytest.mark.asyncio
+async def test_disruption_of_protected_candidate_requires_manual_recovery() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        mission = await create_mission(client)
+        mission_id = mission["mission_id"]
+        first = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={"request_id": "plan-protected-disruption-001", "based_on_revision": None},
+        )
+        assert first.status_code == 201, first.text
+        preferred = first.json()["bundle"]["options"][0]
+        outbound = next(
+            segment
+            for segment in preferred["segments"]
+            if segment["segment_type"] == "intercity_transport"
+            and segment["metadata"].get("direction") == "outbound"
+        )
+        activated = await client.post(
+            f"/api/v1/missions/{mission_id}/revisions/1/activate",
+            json={"expected_active_revision": None},
+        )
+        assert activated.status_code == 200, activated.text
+        locked = await client.post(
+            f"/api/v1/missions/{mission_id}/execution/checkpoints",
+            json={
+                "command_id": "exec-protect-disrupted-001",
+                "based_on_revision": 1,
+                "expected_version": 0,
+                "action": "lock_through",
+                "through_segment_id": outbound["segment_id"],
+            },
+        )
+        assert locked.status_code == 200, locked.text
+        event = await client.post(
+            f"/api/v1/missions/{mission_id}/events",
+            json={
+                "event_id": "evt-protected-disruption-001",
+                "event_type": "transport_disruption",
+                "based_on_revision": 1,
+                "payload": {
+                    "provider": outbound["provider"],
+                    "candidate_id": outbound["candidate_id"],
+                    "status": "cancelled",
+                },
+            },
+        )
+        second = await client.post(
+            f"/api/v1/missions/{mission_id}/plans",
+            json={
+                "request_id": "plan-protected-disruption-002",
+                "based_on_revision": 1,
+                "input_event_id": "evt-protected-disruption-001",
+            },
+        )
+
+    assert event.status_code == 200, event.text
+    assert event.json()["application_status"] == "recorded_only"
+    assert second.status_code == 201, second.text
+    assert all(
+        any(
+            segment["segment_id"] == outbound["segment_id"]
+            and segment["candidate_id"] == outbound["candidate_id"]
+            for segment in option["segments"]
+        )
+        for option in second.json()["bundle"]["options"]
+    )

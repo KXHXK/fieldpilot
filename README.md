@@ -4,7 +4,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 **在线项目站：** [fieldpilot-kxh.netlify.app](https://fieldpilot-kxh.netlify.app/) · **在线工作台：** [fieldpilot-kxh.netlify.app/workbench](https://fieldpilot-kxh.netlify.app/workbench) · **源代码：** [github.com/KXHXK/fieldpilot](https://github.com/KXHXK/fieldpilot)
 
-当前开发版本是 `0.5.0-dev`。类型化语义 Agent Harness 负责把自然语言安全转换为严格 MissionDraft，并治理模型契约、调用预算、确定性后置校验、幂等、审计与 Eval；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
+当前仓库发布版本是 `0.6.0`。类型化语义 Agent Harness 负责把自然语言安全转换为严格 MissionDraft，并治理模型契约、调用预算、确定性后置校验、幂等、审计与 Eval；确定性 Planner、Policy Engine 和独立 Verifier 负责时窗、候选、费用与报销判断。系统不会让模型编造车次、计算成本或执行购票订房。
 
 > `0.1.0` 是已提交、可回退的技术基线，不是最终求职版本。目标 `v1.0` 将围绕真实跨城出差、任务时窗、报销约束和动态重规划重构；完整设计见 [企业级目标设计](docs/specs/2026-07-30-fieldpilot-enterprise-design.md)。在对应实现、评测和部署证据完成前，目标设计中的能力不得写成已落地事实。
 
@@ -18,7 +18,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 自然语言输入 -> Strict Contract -> PydanticAI MissionDraft
 -> Deterministic Guard -> AgentRun -> 澄清 / 用户确认
 -> Mission + VisitTask + ExpensePolicy 持久化
--> Candidate Provider（高德路线/餐饮 POI live/mixed 或显式 Fixture）
+-> Candidate Provider（高德路线/餐饮、授权人工库存或显式 Fixture）
 -> PolicyEngine -> Bounded Planner -> Independent Verifier
 -> PlanRevision / ProviderSnapshot -> Vue 时间线与来源展示
 -> ExecutionCheckpoint 锁定/完成已执行前缀
@@ -34,7 +34,9 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 - 高德 v3 地理编码与 v5 市内路线/周边餐饮 POI 适配，具备异步并发、超时、有限重试、调用预算、缓存和逐能力降级。
 - Planner 在工作点、交通枢纽或酒店附近的可用缓冲中安排餐次；只采用带人均消费且不超过剩余餐补的候选，Policy Engine 按自然日核算，Verifier 复查餐次、锚点、时间窗和费用。
 - 计划请求、Agent 请求与业务事件分别幂等；active revision 使用乐观并发控制。
-- 任务改期/取消/新增/延长、预算和偏好事件可原子应用；天气与交通中断在尚未接入规划过滤前明确标记 `recorded_only`。
+- 任务改期/取消/新增/延长、预算和偏好事件可原子应用；交通取消/不可用会排除候选，延误会平移时间并降低可靠性，高/中天气风险会分别过滤受影响任务的步行与骑行/骑行候选。
+- 报销政策使用追加式不可变版本链；预算事件创建新快照，历史版本不覆盖，PlanRevision 绑定实际使用的 `policy_snapshot_id`。
+- 铁路、航班与酒店支持严格 JSON Schema 的授权人工候选导入，强制标记 `manual` 并保存内容指纹；不抓取 12306 内部接口。
 - 执行检查点命令使用 command ID 幂等与版本号并发控制；锁定/完成位置只能单调前进，重规划会逐段保留已执行前缀并从检查点恢复后缀求解，Verifier 再独立校验边界。
 - Vue 3 + TypeScript 工作台展示 Agent trace、候选比较、执行时间线、政策判定、来源快照和重规划差异。
 - SQLite 本地验证与 PostgreSQL Compose 交付配置；Alembic 迁移、健康/就绪检查和 GitHub Actions CI。
@@ -49,11 +51,12 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 | 高德 v5 市内路线适配 | 已进入规划链路并完成 MockTransport 契约/故障测试；真实密钥未复验 | 已验证适配与降级，未验证实时服务可用性 |
 | 高德 v5 周边餐饮 POI | 已实现预算过滤、缓存、失败降级和来源快照；真实密钥未复验 | 无人均消费字段的 POI 不进入方案，Fixture 不冒充实时报价 |
 | Vue v1 任务、方案、来源与重规划工作台 | 已实现、生产构建并部署 | 本地完整链路与公网 Agent 解析/方案创建已用真实浏览器验收 |
-| Mission、政策快照与计划修订持久化 | 已实现并测试 | SQLite 与 Neon PostgreSQL 已验证；Render 重启后数据仍可读取 |
+| Mission、不可变政策版本与计划修订持久化 | 已实现并测试 | 预算变更追加快照且历史不覆盖；SQLite 迁移已验证，Neon `0005` 待本次发布后迁移 |
 | 有限搜索 Planner + Policy Engine + 独立 Verifier | 已实现；跨城、酒店和无 Key 餐饮使用明确 Fixture | 确定性规划可复现，数据模式必须随 segment 传递 |
 | 计划请求幂等、revision 冲突与激活 | 已实现并测试 | 并发与重放路径已有接口测试 |
 | AgentRun 审计、幂等与固定集 | 已实现输入指纹、trace 查询、5 场景 Mock 基线与独立 15 场景 live 固定集 | Mock 与 live 指标、数据集和报告分离 |
-| ReplanEvent 事实应用与 Revision Diff | 已实现并测试；外部风险信号仅 recorded_only | 不声称所有中断已自动处置 |
+| ReplanEvent 事实应用与 Revision Diff | 已实现并测试；交通中断与天气风险进入确定性候选过滤并保存过滤快照 | 仅处理明确事件载荷，不声称已订阅实时天气或运营中断流 |
+| 授权人工库存导入 | 已实现铁路/航班/酒店 JSON Schema、来源强制标记与内容指纹 | 候选由用户或授权系统提供，不代表自动同步实时库存 |
 | ExecutionCheckpoint 与严格后缀重规划 | 已实现命令幂等、版本冲突、单调锁定/完成和前缀逐段一致性校验 | 只重算检查点后的可变后缀；有界搜索不声称全局最优 |
 | CrewAI、LlamaIndex、Pydantic Evals | 未接入 | 当前业务不需要 |
 | RAG、审批流、SSE、全局路线最优化 | 未实现 | 不属于当前已验收能力 |
@@ -114,6 +117,7 @@ docker compose up --build
 USE_MOCK_LLM=false
 AMAP_API_KEY=
 LOCAL_ROUTE_PROVIDER=amap
+MANUAL_CANDIDATE_FILE=../examples/manual-inventory-v1.json
 PROVIDER_TIMEOUT_SECONDS=3.0
 PROVIDER_MAX_RETRIES=1
 PROVIDER_MAX_CONCURRENCY=4
@@ -130,7 +134,7 @@ VITE_AMAP_JS_KEY=
 VITE_AMAP_JS_SECURITY_CODE=
 ```
 
-后端 `AMAP_API_KEY` 与浏览器 `VITE_AMAP_JS_KEY` 不是同一种 Key。`LOCAL_ROUTE_PROVIDER=fixture` 完全离线；设为 `amap` 后按路线查询真实接口，失败会保留原因并逐项降级。真实密钥完成复验前，不应声称线上可用。
+后端 `AMAP_API_KEY` 与浏览器 `VITE_AMAP_JS_KEY` 不是同一种 Key。`LOCAL_ROUTE_PROVIDER=fixture` 完全离线；设为 `amap` 后按路线查询真实接口，失败会保留原因并逐项降级。`MANUAL_CANDIDATE_FILE` 可选，只接受本地严格 JSON 文件并覆盖跨城交通/住宿候选；示例见 [`examples/manual-inventory-v1.json`](examples/manual-inventory-v1.json)。真实密钥完成复验前，不应声称线上高德可用。
 
 ## 验证
 
@@ -142,7 +146,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前结果（2026-08-02）：后端 `51 passed`；Neon PostgreSQL 已执行 Alembic 至 `20260731_0004 (head)`；完整工作台与项目专题两种前端生产构建成功；Kimi K2.6 的 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%。本地链路、Render 公网 R1/R2 smoke、重启后持久化、生产 CORS、Netlify HTTP/CDN 和公网真实浏览器链路均通过。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-08-10）：后端 `55 passed`；本地 SQLite 已完成 Alembic `20260810_0005 (head)` 升级、schema check、回退与重升；真实 Uvicorn HTTP 进程完成 R1～R5 smoke，覆盖任务改期、预算快照、交通取消、天气风险和严格前缀保护；完整工作台与项目专题两种前端生产构建成功。Kimi K2.6 的既有 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%，每个代码版本每场景调用一次，不声明跨重复稳定率。上一版公网链路已验证；`0.6.0` 的 Neon/Render/Netlify 生产发布需在合并审批后执行。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 

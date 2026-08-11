@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import {
   activateRevision,
@@ -13,8 +13,9 @@ import {
   getMission,
   interpretMission
 } from "./services/api";
+import type { HealthResponse } from "./services/api";
 import type { InterpretMissionResponse, MissionDraft } from "./types/agent";
-import type { Mission, MissionCreate, VisitPriority } from "./types/mission";
+import type { Mission, MissionCreate, ReplanEventType, VisitPriority } from "./types/mission";
 import type { ExecutionAction, ExecutionCheckpoint, PlanOption, PlanRevision, PlanSegment, RevisionDiff } from "./types/planning";
 
 const exampleText = `2026-08-06从上海虹桥站（上海市闵行区申贵路1500号）出发到杭州，行程很紧，只报高铁二等座。
@@ -32,15 +33,28 @@ const selectedOptionId = ref("");
 const loading = ref(false);
 const stage = ref("等待输入");
 const error = ref("");
-const health = ref("未检查");
+const health = ref<HealthResponse | null>(null);
 const replanTaskId = ref("");
 const replanStart = ref("");
 const replanEnd = ref("");
+const replanEventType = ref<Extract<ReplanEventType, "task_rescheduled" | "budget_changed" | "transport_disruption" | "weather_risk">>("task_rescheduled");
+const budgetTotalCap = ref(0);
+const disruptionCandidateId = ref("");
+const disruptionStatus = ref<"delayed" | "cancelled" | "unavailable">("cancelled");
+const disruptionDelayMinutes = ref(30);
+const weatherSeverity = ref<"medium" | "high">("high");
 
 const selectedOption = computed<PlanOption | null>(() => {
   if (!revision.value) return null;
   return revision.value.bundle.options.find((item) => item.option_id === selectedOptionId.value)
     || revision.value.bundle.options[0];
+});
+
+const activePreferredOption = computed<PlanOption | null>(() => {
+  if (!revision.value) return null;
+  return revision.value.bundle.options.find(
+    (item) => item.option_id === revision.value?.bundle.preferred_option_id
+  ) || null;
 });
 
 const sourceModes = computed(() => {
@@ -51,6 +65,26 @@ const sourceModes = computed(() => {
 const preferredOptionSelected = computed(
   () => selectedOption.value?.option_id === revision.value?.bundle.preferred_option_id
 );
+
+const disruptableSegments = computed(() =>
+  (activePreferredOption.value?.segments || []).filter((segment) =>
+    segment.segment_type.includes("transport")
+    && Boolean(segment.candidate_id)
+    && executionStatus(segment) === "planned"
+  )
+);
+
+const agentRuntimeLabel = computed(() => {
+  if (!health.value) return "读取中";
+  if (health.value.status !== "ok") return "状态不可用";
+  return health.value.agent_mode === "live" ? "Live LLM" : "Mock LLM";
+});
+
+const providerRuntimeLabel = computed(() => {
+  if (!health.value) return "读取中";
+  if (health.value.status !== "ok") return "状态不可用";
+  return health.value.local_route_provider === "amap" ? "高德 Provider" : "Fixture Provider";
+});
 
 const checkpointableTypes = new Set(["intercity_transport", "local_transport", "visit"]);
 
@@ -126,6 +160,8 @@ function setReplanDefaults(current: Mission) {
   replanTaskId.value = task.task_id;
   replanStart.value = chinaLocalInput(task.window_start);
   replanEnd.value = chinaLocalInput(task.window_end);
+  budgetTotalCap.value = current.expense_policy.trip_total_cap_yuan;
+  disruptionCandidateId.value = disruptableSegments.value[0]?.candidate_id || "";
 }
 
 async function interpret() {
@@ -179,16 +215,33 @@ async function replan() {
   try {
     const basedOn = mission.value.active_revision;
     const eventId = `evt-${crypto.randomUUID()}`;
-    stage.value = "应用任务改期并写入事件审计";
+    const payload: Record<string, unknown> = replanEventType.value === "task_rescheduled"
+      ? {
+          task_id: replanTaskId.value,
+          new_window_start: `${replanStart.value}:00+08:00`,
+          new_window_end: `${replanEnd.value}:00+08:00`
+        }
+      : replanEventType.value === "budget_changed"
+        ? { trip_total_cap_yuan: budgetTotalCap.value }
+        : replanEventType.value === "transport_disruption"
+          ? {
+              provider: disruptableSegments.value.find((item) => item.candidate_id === disruptionCandidateId.value)?.provider || "unknown",
+              candidate_id: disruptionCandidateId.value,
+              status: disruptionStatus.value,
+              ...(disruptionStatus.value === "delayed" ? { estimated_delay_minutes: disruptionDelayMinutes.value } : {})
+            }
+          : {
+              location: mission.value.visits.find((item) => item.task_id === replanTaskId.value)?.location.city || "任务城市",
+              severity: weatherSeverity.value,
+              affected_task_ids: [replanTaskId.value],
+              summary: weatherSeverity.value === "high" ? "高风险天气，过滤步行与骑行" : "中风险天气，过滤骑行"
+            };
+    stage.value = "应用变更并写入事件审计";
     await createReplanEvent(mission.value.mission_id, {
       event_id: eventId,
-      event_type: "task_rescheduled",
+      event_type: replanEventType.value,
       based_on_revision: basedOn,
-      payload: {
-        task_id: replanTaskId.value,
-        new_window_start: `${replanStart.value}:00+08:00`,
-        new_window_end: `${replanEnd.value}:00+08:00`
-      }
+      payload
     });
     stage.value = "生成事件关联修订";
     const next = await generatePlan(mission.value.mission_id, {
@@ -249,8 +302,64 @@ async function advanceExecution(segment: PlanSegment, action: ExecutionAction) {
 }
 
 async function probeHealth() {
-  try { health.value = (await checkHealth()).status; }
-  catch { health.value = "unavailable"; }
+  try { health.value = await checkHealth(); }
+  catch {
+    health.value = {
+      status: "unavailable",
+      service: "fieldpilot",
+      version: "unknown",
+      local_route_provider: "unknown",
+      agent_mode: "mock"
+    };
+  }
+}
+
+function refLabel(refValue: string | null | undefined, segment: PlanSegment): string {
+  if (!refValue) return "";
+  if (refValue === "mission-origin") return mission.value?.origin.name || "出发地";
+  if (refValue === "arrival-hub" || refValue === "departure-hub") {
+    return `${mission.value?.visits[0]?.location.city || "目的地"}交通枢纽`;
+  }
+  const visit = mission.value?.visits.find((item) => item.task_id === refValue);
+  if (visit) return visit.name;
+  if (refValue.startsWith("hotel:")) return String(segment.metadata.address || segment.title || "住宿点");
+  return refValue;
+}
+
+function segmentRoute(segment: PlanSegment): string {
+  const from = refLabel(segment.from_ref, segment);
+  const to = refLabel(segment.to_ref, segment);
+  if (!from) return "";
+  return to && to !== from ? `${from} → ${to}` : from;
+}
+
+function segmentTitle(segment: PlanSegment): string {
+  if (!segment.segment_type.includes("transport")) return segment.title;
+  const mode = String(segment.metadata.mode || "交通");
+  const labels: Record<string, string> = {
+    rail: "铁路出行",
+    flight: "航班出行",
+    transit: "公共交通",
+    taxi: "出租车",
+    walking: "步行",
+    bicycling: "骑行"
+  };
+  return labels[mode] || mode;
+}
+
+function segmentFacts(segment: PlanSegment): string[] {
+  const facts: string[] = [];
+  const address = segment.metadata.address;
+  const rating = segment.metadata.rating;
+  const distance = segment.metadata.distance_meters;
+  const cabin = segment.metadata.cabin_class;
+  const transfers = segment.metadata.transfers;
+  if (typeof address === "string" && address) facts.push(address);
+  if (typeof rating === "number") facts.push(`评分 ${rating.toFixed(1)}`);
+  if (typeof distance === "number") facts.push(`距任务点约 ${distance} m`);
+  if (typeof cabin === "string" && cabin) facts.push(`席别 ${cabin}`);
+  if (typeof transfers === "number") facts.push(`${transfers} 次换乘`);
+  return facts;
 }
 
 function formatTime(value: string) {
@@ -268,21 +377,29 @@ function reset() {
   stage.value = "等待输入";
   error.value = "";
 }
+
+onMounted(probeHealth);
 </script>
 
 <template>
   <main>
     <header class="topbar">
       <a class="brand" href="#" @click.prevent="reset"><span>FP</span><strong>FieldPilot</strong></a>
-      <nav><a href="/">项目说明</a><span class="live-dot" />API {{ health }}</nav>
+      <nav><a href="/">项目说明</a><span class="live-dot" />API {{ health?.status || "检查中" }}</nav>
       <button class="text-button" @click="probeHealth">健康检查</button>
     </header>
+
+    <section class="runtime-boundary" aria-label="当前演示环境的数据边界">
+      <div><span>任务解析</span><strong>{{ agentRuntimeLabel }}</strong></div>
+      <div><span>候选数据</span><strong>{{ providerRuntimeLabel }}</strong></div>
+      <p>当前公网环境用于验证任务持久化、政策约束、规划、检查点与重规划；票价、酒店、路线和餐饮为明确标记的演示数据，不代表实时库存或可预订结果。</p>
+    </section>
 
     <section class="hero compact-hero">
       <div class="hero-copy">
         <p class="eyebrow">FIELD MISSION ORCHESTRATION</p>
-        <h1>把出差要求，<br /><em>变成可执行行程。</em></h1>
-        <p class="hero-description">自然语言负责收集意图；确定性规划器负责时间窗、交通、住宿、费用和报销合规；每次调整都有事件、版本和差异证据。</p>
+        <h1>外勤任务，<em>可靠编排</em></h1>
+        <p class="hero-description">自然语言形成任务草案；确定性规划器负责行程、费用、报销和动态重规划。</p>
       </div>
       <aside class="status-card">
         <span>WORKFLOW STATUS</span><strong>{{ stage }}</strong>
@@ -350,7 +467,7 @@ function reset() {
           <article v-for="segment in selectedOption?.segments" :key="segment.segment_id" :class="`execution-${executionStatus(segment)}`">
             <time>{{ formatTime(segment.start_at) }}<small>{{ formatTime(segment.end_at) }}</small></time>
             <i :class="`segment-${segment.segment_type}`" />
-            <div><strong>{{ segment.title }}</strong><p>{{ segment.from_ref || "" }}<template v-if="segment.to_ref"> → {{ segment.to_ref }}</template></p><span :class="`source-${segment.source_mode}`">{{ segment.source_mode }}</span><span class="execution-pill">{{ executionStatus(segment) }}</span><small>{{ segment.provider }} · ¥{{ segment.cost_yuan }}</small><div v-if="checkpointableTypes.has(segment.segment_type) && preferredOptionSelected" class="execution-actions"><button v-if="executionStatus(segment) === 'planned'" :disabled="loading" @click="advanceExecution(segment, 'lock_through')">锁定至此</button><button v-else-if="executionStatus(segment) === 'locked'" :disabled="loading" @click="advanceExecution(segment, 'complete_through')">完成至此</button></div></div>
+            <div><strong>{{ segmentTitle(segment) }}</strong><p>{{ segmentRoute(segment) }}</p><div v-if="segmentFacts(segment).length" class="segment-facts"><span v-for="fact in segmentFacts(segment)" :key="fact">{{ fact }}</span></div><span :class="`source-${segment.source_mode}`">{{ segment.source_mode }}</span><span class="execution-pill">{{ executionStatus(segment) }}</span><small>{{ segment.provider }} · ¥{{ segment.cost_yuan }}</small><div v-if="checkpointableTypes.has(segment.segment_type) && preferredOptionSelected" class="execution-actions"><button v-if="executionStatus(segment) === 'planned'" :disabled="loading" @click="advanceExecution(segment, 'lock_through')">锁定至此</button><button v-else-if="executionStatus(segment) === 'locked'" :disabled="loading" @click="advanceExecution(segment, 'complete_through')">完成至此</button></div></div>
           </article>
         </div>
         <p v-if="!preferredOptionSelected" class="provenance-note">执行位置只绑定当前激活的首选方案；切回推荐方案后可推进检查点。</p>
@@ -358,7 +475,7 @@ function reset() {
 
       <section class="two-column">
         <article class="content-card">
-          <div class="section-heading compact"><span>04 / POLICY</span><h3>报销规则判定</h3></div>
+          <div class="section-heading compact"><span>04 / POLICY</span><h3>报销规则判定</h3><p v-if="mission">不可变快照 V{{ mission.expense_policy.snapshot_sequence }} · {{ mission.expense_policy.snapshot_id }}</p></div>
           <dl v-if="selectedOption" class="v1-cost-ledger">
             <div><dt>跨城交通</dt><dd>¥{{ selectedOption.costs.intercity_transport_yuan }}</dd></div>
             <div><dt>市内交通</dt><dd>¥{{ selectedOption.costs.local_transport_yuan }}</dd></div>
@@ -376,12 +493,27 @@ function reset() {
       </section>
 
       <section class="content-card replan-card">
-        <div class="section-heading compact"><span>06 / EVENT-DRIVEN REPLAN</span><h3>现场变更后生成新修订</h3><p>选择任务并调整时间窗。系统先应用事件事实，再生成关联修订和差异，最后通过乐观锁激活。</p></div>
+        <div class="section-heading compact"><span>06 / EVENT-DRIVEN REPLAN</span><h3>现场变更后生成新修订</h3><p>任务、预算与风险事件先进入审计或候选过滤，再生成关联修订和差异，最后通过乐观锁激活。</p></div>
         <div class="replan-form">
-          <label>工作任务<select v-model="replanTaskId" @change="mission && setReplanDefaults(mission)"><option v-for="visit in mission?.visits" :key="visit.task_id" :value="visit.task_id" :disabled="visit.locked || visit.completed">{{ visit.name }}{{ visit.completed ? "（已完成）" : visit.locked ? "（已锁定）" : "" }}</option></select></label>
-          <label>新开始时间<input v-model="replanStart" type="datetime-local" /></label>
-          <label>新结束时间<input v-model="replanEnd" type="datetime-local" /></label>
-          <button class="primary" :disabled="loading || !replanTaskId" @click="replan">{{ loading ? stage : "应用事件并重规划" }}</button>
+          <label>事件类型<select v-model="replanEventType"><option value="task_rescheduled">任务改期</option><option value="budget_changed">总预算调整</option><option value="transport_disruption">交通中断/延误</option><option value="weather_risk">天气风险</option></select></label>
+          <template v-if="replanEventType === 'task_rescheduled'">
+            <label>工作任务<select v-model="replanTaskId" @change="mission && setReplanDefaults(mission)"><option v-for="visit in mission?.visits" :key="visit.task_id" :value="visit.task_id" :disabled="visit.locked || visit.completed">{{ visit.name }}{{ visit.completed ? "（已完成）" : visit.locked ? "（已锁定）" : "" }}</option></select></label>
+            <label>新开始时间<input v-model="replanStart" type="datetime-local" /></label>
+            <label>新结束时间<input v-model="replanEnd" type="datetime-local" /></label>
+          </template>
+          <template v-else-if="replanEventType === 'budget_changed'">
+            <label>新的总预算<input v-model.number="budgetTotalCap" type="number" min="1" /></label>
+          </template>
+          <template v-else-if="replanEventType === 'transport_disruption'">
+            <label>受影响交通<select v-model="disruptionCandidateId"><option v-for="segment in disruptableSegments" :key="String(segment.candidate_id)" :value="segment.candidate_id">{{ segmentTitle(segment) }} · {{ segmentRoute(segment) }}</option></select></label>
+            <label>状态<select v-model="disruptionStatus"><option value="cancelled">取消</option><option value="unavailable">不可用</option><option value="delayed">延误</option></select></label>
+            <label v-if="disruptionStatus === 'delayed'">预计延误（分钟）<input v-model.number="disruptionDelayMinutes" type="number" min="0" max="1440" /></label>
+          </template>
+          <template v-else>
+            <label>受影响任务<select v-model="replanTaskId"><option v-for="visit in mission?.visits" :key="visit.task_id" :value="visit.task_id" :disabled="visit.locked || visit.completed">{{ visit.name }}</option></select></label>
+            <label>风险等级<select v-model="weatherSeverity"><option value="high">高：过滤步行与骑行</option><option value="medium">中：过滤骑行</option></select></label>
+          </template>
+          <button class="primary" :disabled="loading || (replanEventType === 'transport_disruption' ? !disruptionCandidateId : replanEventType === 'budget_changed' ? budgetTotalCap <= 0 : !replanTaskId)" @click="replan">{{ loading ? stage : "应用事件并重规划" }}</button>
         </div>
         <div v-if="diff" class="diff-panel">
           <div><strong>R{{ diff.from_revision }} → R{{ diff.to_revision }}</strong><span>{{ diff.changes.length }} 处变化 · {{ diff.preserved_segment_count }} 段保持</span></div>

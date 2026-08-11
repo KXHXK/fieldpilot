@@ -2,7 +2,10 @@ from copy import deepcopy
 
 import httpx
 import pytest
+from sqlalchemy import select
 
+from app.db import SessionFactory
+from app.db.models import ExpensePolicySnapshotRecord, ExpensePolicyVersionRecord
 from app.main import app
 
 
@@ -160,7 +163,7 @@ async def test_replan_event_applies_fact_change_and_rejects_request_id_reuse(
 
 
 @pytest.mark.asyncio
-async def test_external_signal_is_recorded_without_claiming_application(
+async def test_weather_signal_is_applied_as_candidate_filter(
     mission_payload: dict,
 ) -> None:
     transport = httpx.ASGITransport(app=app)
@@ -177,14 +180,17 @@ async def test_external_signal_is_recorded_without_claiming_application(
                     "location": "杭州",
                     "severity": "high",
                     "affected_task_ids": [mission["visits"][0]["task_id"]],
-                    "summary": "暴雨风险，等待路线能力接入",
+                    "summary": "暴雨风险，过滤受影响任务的非机动车路线",
                 },
             },
         )
 
     assert response.status_code == 200
-    assert response.json()["application_status"] == "recorded_only"
-    assert response.json()["changed_fields"] == []
+    payload = response.json()
+    assert payload["application_status"] == "applied"
+    assert payload["changed_fields"][0]["path"].startswith(
+        "candidate_filters.weather."
+    )
 
 
 @pytest.mark.asyncio
@@ -258,6 +264,9 @@ async def test_supported_events_update_budget_preferences_and_task_collection(
             },
         )
         loaded = await client.get(f"/api/v1/missions/{mission_id}")
+        policy_history = await client.get(
+            f"/api/v1/missions/{mission_id}/expense-policy/versions"
+        )
 
     responses = (budget, preference, added, cancelled)
     assert all(item.status_code == 200 for item in responses), [
@@ -265,6 +274,14 @@ async def test_supported_events_update_budget_preferences_and_task_collection(
     ]
     current = loaded.json()
     assert current["expense_policy"]["trip_total_cap_yuan"] == 1900
+    assert current["expense_policy"]["snapshot_id"] != original["expense_policy"][
+        "snapshot_id"
+    ]
+    assert current["expense_policy"]["snapshot_sequence"] == 2
+    assert current["expense_policy"]["based_on_snapshot_id"] == original[
+        "expense_policy"
+    ]["snapshot_id"]
+    assert current["expense_policy"]["source_event_id"] == "evt-budget-apply-001"
     assert current["transport_preferences"]["minimum_transfer_minutes"] == 45
     assert any(item["name"] == "新增回访" for item in current["visits"])
     assert original["visits"][0]["task_id"] not in {
@@ -273,6 +290,35 @@ async def test_supported_events_update_budget_preferences_and_task_collection(
     assert [item["position"] for item in current["visits"]] == list(
         range(1, len(current["visits"]) + 1)
     )
+    assert policy_history.status_code == 200
+    assert [item["snapshot_sequence"] for item in policy_history.json()] == [1, 2]
+    assert [item["trip_total_cap_yuan"] for item in policy_history.json()] == [
+        1600,
+        1900,
+    ]
+
+    async with SessionFactory() as session:
+        versions = list(
+            (
+                await session.execute(
+                    select(ExpensePolicyVersionRecord)
+                    .where(ExpensePolicyVersionRecord.mission_id == mission_id)
+                    .order_by(ExpensePolicyVersionRecord.sequence)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        legacy = (
+            await session.execute(
+                select(ExpensePolicySnapshotRecord).where(
+                    ExpensePolicySnapshotRecord.mission_id == mission_id
+                )
+            )
+        ).scalar_one()
+
+    assert [item.trip_total_cap_yuan for item in versions] == [1600, 1900]
+    assert legacy.trip_total_cap_yuan == 1600
 
 
 @pytest.mark.asyncio

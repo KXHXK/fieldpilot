@@ -1,0 +1,46 @@
+name: fieldpilot-amap-provider-validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Check provider credential
+        env:
+          FIELD_PILOT_AMAP_API_KEY: ${{ secrets.FIELD_PILOT_AMAP_API_KEY }}
+        run: |
+          if [ -z "$FIELD_PILOT_AMAP_API_KEY" ]; then
+            echo "Configure repository secret FIELD_PILOT_AMAP_API_KEY before validation."
+            exit 2
+          fi
+      - name: Run live Amap validation
+        working-directory: backend
+        env:
+          AMAP_API_KEY: ${{ secrets.FIELD_PILOT_AMAP_API_KEY }}
+          PROVIDER_TIMEOUT_SECONDS: "5"
+          PROVIDER_MAX_RETRIES: "1"
+          PROVIDER_MAX_CONCURRENCY: "3"
+          PROVIDER_MAX_LIVE_CALLS: "12"
+        run: python scripts/validate_amap_provider.py
+      - name: Upload sanitized report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amap-provider-validation
+          path: backend/artifacts/amap-provider-validation.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -32,7 +32,7 @@ from app.planning import (
     PlanVerifier,
     PolicyEngine,
 )
-from app.providers import create_candidate_provider
+from app.providers import EventAwareCandidateProvider, create_candidate_provider
 from app.services.mission_service import (
     MissionNotFoundError,
     RevisionConflictError,
@@ -94,6 +94,7 @@ async def generate_plan_revision(
         raise RevisionConflictError(
             command.based_on_revision, mission_record.active_revision
         )
+    input_event: ReplanEventRecord | None = None
     if command.input_event_id is not None:
         input_event = await session.get(ReplanEventRecord, command.input_event_id)
         if input_event is None or input_event.mission_id != mission_id:
@@ -109,6 +110,17 @@ async def generate_plan_revision(
         session, mission_id
     )
     provider = create_candidate_provider(settings)
+    if (
+        input_event is not None
+        and input_event.application_status == "applied"
+        and input_event.event_type in EventAwareCandidateProvider.supported_event_types
+    ):
+        provider = EventAwareCandidateProvider(
+            provider,
+            event_id=input_event.event_id,
+            event_type=input_event.event_type,
+            payload=input_event.event_payload,
+        )
     policy_engine = PolicyEngine()
     planner = BoundedMissionPlanner(provider, policy_engine)
     verifier = PlanVerifier(policy_engine)
@@ -171,6 +183,7 @@ async def generate_plan_revision(
         mission_id=mission_id,
         preferred_option_id=options[0].option_id,
         options=options,
+        policy_snapshot_id=mission.expense_policy.snapshot_id,
         provider_snapshot_ids=snapshot_ids,
         generated_at=generated_at,
         planner_version=planner.version,

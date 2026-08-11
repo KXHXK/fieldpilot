@@ -70,6 +70,7 @@ export interface PlanBundle {
   mission_id: string;
   preferred_option_id: string;
   options: PlanOption[];
+  policy_snapshot_id?: string | null;
   provider_snapshot_ids: string[];
   generated_at: string;
   planner_version: string;

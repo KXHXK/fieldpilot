@@ -67,6 +67,9 @@ export interface ExpensePolicyInput {
 
 export interface ExpensePolicySnapshot extends ExpensePolicyInput {
   snapshot_id: string;
+  snapshot_sequence: number;
+  based_on_snapshot_id?: string | null;
+  source_event_id?: string | null;
 }
 
 export interface MissionCreate {

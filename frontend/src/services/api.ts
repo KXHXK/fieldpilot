@@ -2,6 +2,14 @@ import type { InterpretMissionResponse } from "../types/agent";
 import type { Mission, MissionCreate, ReplanEventCreate, ReplanEventReceipt } from "../types/mission";
 import type { ExecutionCheckpoint, ExecutionCheckpointCommand, PlanGenerationRequest, PlanRevision, RevisionActivationReceipt, RevisionDiff } from "../types/planning";
 
+export interface HealthResponse {
+  status: string;
+  service: string;
+  version: string;
+  local_route_provider: string;
+  agent_mode: "mock" | "live";
+}
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -21,7 +29,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export const checkHealth = () => request<{ status: string }>("/health");
+export const checkHealth = () => request<HealthResponse>("/health");
 
 export const interpretMission = (text: string, referenceDate: string) =>
   request<InterpretMissionResponse>("/v1/agent/interpret-mission", {

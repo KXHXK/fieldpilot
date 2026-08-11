@@ -1,0 +1,70 @@
+{
+  "import_id": "manual-hangzhou-20260806-v1",
+  "source_label": "authorized-manual-demo",
+  "outbound": [
+    {
+      "candidate_id": "manual-g7315",
+      "provider": "manual-import",
+      "source_mode": "manual",
+      "mode": "rail",
+      "direction": "outbound",
+      "from_ref": "mission-origin",
+      "to_ref": "arrival-hub",
+      "depart_at": "2026-08-06T08:00:00+08:00",
+      "arrive_at": "2026-08-06T12:00:00+08:00",
+      "price_yuan": 310,
+      "cabin_class": "second_class",
+      "transfers": 0,
+      "reliability_score": 92,
+      "metadata": {"service_name": "人工录入高铁候选"}
+    },
+    {
+      "candidate_id": "manual-flight-out-01",
+      "provider": "manual-import",
+      "source_mode": "manual",
+      "mode": "flight",
+      "direction": "outbound",
+      "from_ref": "mission-origin",
+      "to_ref": "arrival-hub",
+      "depart_at": "2026-08-06T08:50:00+08:00",
+      "arrive_at": "2026-08-06T10:20:00+08:00",
+      "price_yuan": 620,
+      "cabin_class": "economy",
+      "transfers": 0,
+      "reliability_score": 82,
+      "metadata": {"service_name": "人工录入航班候选"}
+    }
+  ],
+  "returns": [
+    {
+      "candidate_id": "manual-g7520",
+      "provider": "manual-import",
+      "source_mode": "manual",
+      "mode": "rail",
+      "direction": "return",
+      "from_ref": "departure-hub",
+      "to_ref": "mission-origin",
+      "depart_at": "2026-08-07T17:30:00+08:00",
+      "arrive_at": "2026-08-07T21:30:00+08:00",
+      "price_yuan": 310,
+      "cabin_class": "second_class",
+      "transfers": 0,
+      "reliability_score": 90,
+      "metadata": {"service_name": "人工录入返程高铁"}
+    }
+  ],
+  "stays": [
+    {
+      "candidate_id": "manual-hotel-work-01",
+      "provider": "manual-import",
+      "source_mode": "manual",
+      "name": "人工录入任务点酒店",
+      "address": "杭州市西湖区文三路附近",
+      "city": "杭州",
+      "nightly_price_yuan": 420,
+      "rating": 4.6,
+      "metadata": {"authorization": "user-supplied"}
+    }
+  ],
+  "notes": "示例文件只演示严格导入契约，不代表实时库存、价格或可预订状态。"
+}

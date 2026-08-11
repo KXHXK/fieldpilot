@@ -1,57 +1,59 @@
-# FieldPilot 0.5.0-dev 发布验收清单
+# FieldPilot 0.6.0 发布验收清单
 
-验收日期：2026-08-02
+验收日期：2026-08-10
 
-验收分支：`agent/public-workbench`
+发布候选分支：`release/fieldpilot-closure-20260810`
 
-已知稳定回滚点：`bc53426`（首个已验证 Render 生产部署）
+发布前稳定回滚点：`134d436`（当前 `main`，上一版公网项目站与后端已验证）
 
-## 已验证
+## 本地已验证
 
-- [x] 无 `.env`、Key、依赖目录或构建目录进入 Git。
-- [x] SQLite + Alembic `20260731_0004` 升降级和 schema check。
-- [x] 51 项 Pytest，包含执行检查点单调推进/幂等/并发冲突、严格前缀保留、Verifier 篡改拦截、Neon URL 归一化、Kimi K2.6 非思考结构化输出、确定性澄清/安全标签与显式日期归一化，以及自然语言到事件式 R2 的 API E2E。
-- [x] 删除旧 `/api/field-task/plan`、旧多 Agent、旧模型/服务和未使用前端组件；回归测试固定旧接口返回 404。
-- [x] 15 场景独立 live 数据集、三次重复、延迟/Token/稳定率指标及 OpenAI-compatible 手动工作流；fallback 不进入 live 得分。
-- [x] 时间线生成工作点/酒店附近餐次，按自然日核算餐补；候选、失败原因和来源写入 ProviderSnapshot。
-- [x] 锁定/完成操作更新任务执行态；重规划从检查点恢复，首选 R2 对受保护段保持逐字段一致。
-- [x] Vue TypeScript 检查与 Vite production build。
-- [x] 实际进程 `/api/health`、`/api/ready` 返回成功。
-- [x] Vite `/api` 代理到正式后端端口 8000。
-- [x] `Origin: http://localhost:5173` 获得正确 CORS 响应。
-- [x] 真实浏览器完成 interpret → R1 → lock V1 → event → R2 → complete V2 → diff。
-- [x] 浏览器控制台无 warning/error。
-- [x] Fixture、manual、mock 状态在页面明确显示。
-- [x] 根路径使用 `showcase` 项目专题，`/workbench` 连接实际公网后端；Mock/Fixture 来源在 UI 明确标记。
-- [x] 专题页桌面/移动端无横向溢出，R1/R2 时间线切换有效，浏览器控制台无 warning/error。
-- [x] Neon `fieldpilot` 数据库执行 Alembic 至 `20260731_0004 (head)`，并通过独立就绪查询。
-- [x] Kimi K2.6 完成 15 场景真实评测：15/15 live、无 fallback；最终全量 run 的状态/安全标签准确率 100%，字段 94.87%，澄清 93.33%。
+- [x] 工作区基线变更已保留在独立发布分支，没有删除用户已有的前端可读性与运行边界改进。
+- [x] 无 `.env`、Key、依赖目录、构建目录或评测 artifact 进入 Git。
+- [x] 后端 55 项 Pytest 全部通过。
+- [x] Alembic `20260810_0005` 完成 upgrade、schema check、downgrade 到 `20260731_0004` 与重新 upgrade。
+- [x] 不可变报销政策版本链：预算事件追加新快照，旧投影不覆盖，计划保存 `policy_snapshot_id`。
+- [x] 交通中断候选过滤：取消/不可用排除候选，延误平移时间并降低可靠性，过滤证据进入 ProviderSnapshot。
+- [x] 天气风险候选过滤：高风险过滤受影响任务的步行和骑行，中风险过滤骑行，过滤证据可审计。
+- [x] 授权人工库存导入：铁路、航班和酒店使用严格 JSON Schema，强制 `manual` 来源并保存 SHA-256 内容指纹。
+- [x] Vue 工作台支持任务改期、预算变化、交通中断和天气风险四类可演示事件，并展示政策快照版本。
+- [x] Vue TypeScript 检查、工作台 Vite production build 与 `showcase` production build 均通过。
+- [x] CI 同时构建工作台与实际 Netlify 使用的 showcase 模式。
+- [x] 高德真实服务验收脚本与手动 GitHub Actions 工作流已提供；报告不保存 Key、带 Key URL 或原始响应。
+- [x] 本地真实 HTTP 进程完成 R1→R5 smoke：任务改期、预算快照、交通取消和天气风险均为 `applied`，政策快照绑定正确、受影响候选被排除、检查点前缀保持不变。
 
-## 已配置但未验证
+## 既有真实模型证据
 
-- [x] Docker 镜像已由 Render 云端构建并运行；本地 PostgreSQL Compose/Nginx 仍因本机没有 Docker CLI 未实跑。
-- [x] Render Free Blueprint、Neon PostgreSQL URL 归一化、migration-on-start、`/api/ready` 和生产 CORS 配置。
-- [x] 独立 FastAPI/PostgreSQL 公网后端：Render Docker/FastAPI 已连接 Neon，并通过完整 smoke、CORS 和重启恢复验证。
+- [x] Kimi K2.6 固定 15 场景最终轮为 15/15 Live、无 fallback。
+- [x] 最终轮状态与安全标签准确率 100%，选定字段精确率 94.87%，澄清字段精确率 93.33%，P50/P95 为 16.91/26.92 秒。
+- [x] 三轮数据来自三个代码版本，每个版本每场景调用一次；不把它表述为同一版本三次重复，也不声明跨重复稳定率。
+- [x] Live Eval 与 Mock 数据集、指标和 artifact 分离；任何 fallback 都会让 Live 工作流失败。
 
-## 远端验证
+## 上一版公网已验证
 
-- [x] GitHub Actions `verify`：后端测试、Alembic schema check 与前端构建通过。
-- [x] Netlify 项目站与在线工作台：<https://fieldpilot-kxh.netlify.app/>、<https://fieldpilot-kxh.netlify.app/workbench>。
-- [x] 生产 deploy `6a6f13259646109fe6f02be6`：根路径、工作台、SPA 回退、JS/CSS CDN、CSP 与真实浏览器 Agent 解析通过。
-- [x] Render API：<https://fieldpilot-api-t7m6.onrender.com/api/health>；初始生产 commit `bc53426`。
-- [x] GitHub Actions live eval run `30687086569`：15/15 Kimi K2.6 调用为 live，artifact 已下载核验。
+- [x] Netlify 项目站与工作台：<https://fieldpilot-kxh.netlify.app/>、<https://fieldpilot-kxh.netlify.app/workbench>。
+- [x] 2026-08-10 只读复核：Netlify 两个入口均返回 200；Render health/ready 可用并明确报告当前线上仍为 `0.5.0-dev`、Mock LLM 与 Fixture Provider。
+- [x] 当前生产 deploy `6a6f2177f207a9dccf2184db` 已验证根路径、工作台、SPA 回退、JS/CSS CDN、CSP 与浏览器主链路。
+- [x] Render API：<https://fieldpilot-api-t7m6.onrender.com/api/health>；health/ready、精确 CORS、完整 R1/R2 smoke 和重启恢复均通过。
+- [x] Neon PostgreSQL 上一版已迁移到 `20260731_0004`，数据在 Render 重启后仍可读取。
 
-## 需要外部凭证
+## 需要人工审批或外部凭证
 
-- [ ] 使用个人高德 Web Service Key 做最小真实地理编码、路线和周边餐饮 POI 验收。
-- [x] 配置 `FIELD_PILOT_LLM_API_KEY` 与供应商 variables，运行 `fieldpilot-live-agent-eval`，下载与 Mock 分开的真实模型报告并记录 run URL/commit。
-- [ ] 如果需要交互地图，单独配置公开的 Web JS Key 与安全码。
+- [ ] 审查并合并 `release/fieldpilot-closure-20260810` 到 `main`，触发 GitHub Actions、Render 和 Netlify 生产发布。
+- [ ] 确认 Neon 生产迁移到 `20260810_0005`，再验证 `/api/ready`、完整 R1/R2、四类事件和重启恢复。
+- [ ] 确认 Netlify 生产页显示 `0.6.0`、55 项测试口径、运行边界和新事件工作台。
+- [ ] 配置 GitHub secret `FIELD_PILOT_AMAP_API_KEY`，手动运行 `fieldpilot-amap-provider-validation` 并保存脱敏报告。
+- [ ] 只有需要浏览器交互地图时才配置独立 Web JS Key 与安全码；后端 Web Service Key 不得进入前端。
 
-## 公网后端发布验收
+## 发布后验收命令
 
-- [x] 后端 HTTPS `/api/health` 和 `/api/ready` 返回 200。
-- [x] CORS 只允许实际前端 origin，随机预览 origin 被拒绝。
-- [x] 前端 `VITE_API_BASE_URL` 指向正确 HTTPS 后端并重新构建。
-- [x] 云端 migration 完成；Render 重启后 revision、event 和执行检查点仍存在。
-- [x] health、完整 smoke 与公网真实浏览器链路通过；没有消耗真实 Provider 配额。
-- [x] README 记录已验证事实、初始部署 commit 与 Netlify deploy。
+```powershell
+Invoke-RestMethod https://fieldpilot-api-t7m6.onrender.com/api/health
+Invoke-RestMethod https://fieldpilot-api-t7m6.onrender.com/api/ready
+
+cd D:\CODEX\agent-portfolio\fieldpilot\backend
+.\.venv\Scripts\python.exe scripts\smoke_workflow.py `
+  --base-url https://fieldpilot-api-t7m6.onrender.com/api
+```
+
+生产发布未完成前，只能说“0.6.0 发布候选已本地验收”，不能把新迁移和新事件过滤写成已在公网验证。
