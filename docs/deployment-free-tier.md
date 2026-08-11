@@ -42,7 +42,7 @@ Invoke-RestMethod "$apiBase/api/ready"
 
 ## 当前状态
 
-截至 2026-08-12，三层免费拓扑的 `0.6.0` 已上线：Netlify 项目站与工作台为 <https://fieldpilot-kxh.netlify.app/> 和 `/workbench`，Render API 为 <https://fieldpilot-api-t7m6.onrender.com>，数据进入 Neon `fieldpilot` PostgreSQL。生产合并 commit 为 `c41b51b`，Netlify 生产 deploy 为 `6a7b65c4c0df50fb6e96d2b5`；已完成 health/ready、R1～R5 smoke、政策版本查询、CORS、SPA/CSP 和浏览器主链路复验。
+截至 2026-08-12，三层免费拓扑的 `0.6.0` 已上线：Netlify 项目站与工作台为 <https://fieldpilot-kxh.netlify.app/> 和 `/workbench`，Render API 为 <https://fieldpilot-api-t7m6.onrender.com>，数据进入 Neon `fieldpilot` PostgreSQL。生产合并 commit 为 `c41b51b`，首次 `0.6.0` 验收 deploy 为 `6a7b65c4c0df50fb6e96d2b5`；已完成 health/ready、R1～R5 smoke、政策版本查询、CORS、SPA/CSP、浏览器主链路和冷启动恢复复验。
 
 已取得的上线证据：
 

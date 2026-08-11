@@ -8,6 +8,8 @@
 
 生产合并点：`c41b51b`（PR #15）
 
+生产证据合并点：`09ebc66`（PR #16）
+
 ## 本地已验证
 
 - [x] 工作区基线变更已保留在独立发布分支，没有删除用户已有的前端可读性与运行边界改进。
@@ -45,7 +47,7 @@
 
 - [x] `release/fieldpilot-closure-20260810` 已通过 PR #15 合并，main CI 两次 PR 校验和合并后校验均成功。
 - [x] Neon/Render/Netlify 已发布 `0.6.0`，并完成完整 R1～R5 与浏览器复验。
-- [ ] 证据提交触发 Render 重启后读取上述 smoke Mission，完成本版本的重启恢复复核。
+- [x] 证据 PR #16 合并后的 Render 冷启动完成；上述 smoke Mission 仍为 active R5，并恢复五个修订、两版政策、执行检查点 V2 与五段受保护前缀。
 - [ ] 配置 GitHub secret `FIELD_PILOT_AMAP_API_KEY`，手动运行 `fieldpilot-amap-provider-validation` 并保存脱敏报告。
 - [ ] 只有需要浏览器交互地图时才配置独立 Web JS Key 与安全码；后端 Web Service Key 不得进入前端。
 

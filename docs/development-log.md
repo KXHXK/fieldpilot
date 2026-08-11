@@ -378,4 +378,5 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - Netlify 生产 deploy `6a7b65c4c0df50fb6e96d2b5` 上线。根路径、`/workbench`、SPA 回退、指纹化资源、CSP 和 `0.6.0`/`55 passed` 页面口径均通过。
 - 生产 R1～R5 smoke 创建 Mission `msn-cd05f03d864b4dd78a07`；四类事件均 applied，政策快照 sequence 1→2 且 R3 绑定新快照，取消候选被排除，五段受保护前缀保持不变。
 - CORS 正例只返回正式 Netlify origin，随机 origin 无许可；真实浏览器显示 `API ok` 与 Mock/Fixture 边界，并完成杭州示例的解析、方案生成和激活。
+- 证据 PR #16 合并为 `main@09ebc66` 后 Render 出现约 50 秒冷启动；恢复后再次读取上述 Mission，仍为 active R5，并保留五个修订、两版政策、执行检查点 V2 和五段受保护前缀，证明状态不依赖容器临时文件系统。
 - 真实高德 Web Service Key 尚未配置，仍不声明线上实时路线、餐饮、票价、酒店库存或预订能力。
