@@ -10,7 +10,7 @@ PydanticAI、FastAPI、Pydantic v2、SQLAlchemy/Alembic、Vue 3/TypeScript、htt
 - 针对本人跨省市外勤中交通、住宿、多工作点时窗与报销规则分散的问题，设计“类型化语义 Agent Harness + 确定性编排内核”：用严格契约、有界模型调用、确定性后置校验、幂等与运行审计管理自然语言入口，避免 LLM 编造车次、价格和合规结论。
 - 实现异步 Candidate Provider 与有界 Beam Search，融合跨城交通、住宿和市内路线候选，Policy Engine 过滤席别/舱位及费用上限，Verifier 独立复算任务覆盖、时间冲突、分类成本和政策不变量，输出最多 3 个带评分明细的可解释方案。
 - 封装高德地理编码与 v5 路径规划适配器，加入显式超时、有限重试/并发/调用预算、查询缓存、in-flight 去重和按路线方式降级；通过 ProviderSnapshot 与 `live/mixed/fixture` 标记保留来源和失败证据。
-- 建立 Mission/PlanRevision/ReplanEvent/ExecutionCheckpoint/AgentRun 与不可变政策版本持久化，以输入指纹、命令幂等、乐观并发和严格前缀保护实现检查点后的后缀重规划；本地 `0.6.0` 完成 55 项后端回归，上一版已部署 Render Docker/FastAPI、Neon PostgreSQL 与 Netlify 工作台。
+- 建立 Mission/PlanRevision/ReplanEvent/ExecutionCheckpoint/AgentRun 与不可变政策版本持久化，以输入指纹、命令幂等、乐观并发和严格前缀保护实现检查点后的后缀重规划；`0.6.0` 完成 55 项后端回归并部署 Render Docker/FastAPI、Neon PostgreSQL 与 Netlify 工作台。
 - 建立 15 场景版本化 Kimi K2.6 Live Eval，覆盖完整/缺失输入、精确报销字段、任务时窗和 Prompt Injection；依据失败样本重算澄清与安全标签，最终 15/15 live、状态/安全 100%、字段 94.87%、澄清 93.33%，且 fallback 不计入模型指标。
 
 篇幅受限时，保留 Harness、确定性规划/校验和真实 Eval 三条，把部署与测试数合并到项目链接或面试讲解中。

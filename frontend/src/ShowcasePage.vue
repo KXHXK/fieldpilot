@@ -222,7 +222,7 @@ const stack = [
         <article><span>API & DATABASE</span><strong>幂等、版本冲突与迁移往返</strong><p>ExecutionCommand 保存命令指纹；expected_version 防止并发覆盖；Alembic 0004 可升级、检查和回退。</p></article>
         <article><span>PLANNING</span><strong>受保护前缀逐字段一致</strong><p>HTTP 冒烟输出 protected_prefix_unchanged=true；Verifier 测试覆盖删除、篡改和越界。</p></article>
         <article><span>FRONTEND</span><strong>真实浏览器主链路</strong><p>R1 → lock V1 → event → R2 → complete V2；已完成任务禁用，控制台无 warning/error。</p></article>
-        <article><span>DELIVERY</span><strong>发布候选已本地验收</strong><p>后端 55 项测试、迁移 schema check、工作台与专题页两种 Vue TypeScript/Vite production build 均通过；合并后由 main CI 复验。</p></article>
+        <article><span>DELIVERY</span><strong>0.6.0 已完成生产验收</strong><p>后端 55 项测试、迁移 schema check、工作台与专题页双构建及 main CI 均通过；Render/Neon R1～R5 smoke 与 Netlify 浏览器主链路已复验。</p></article>
         <article><span>PUBLIC RUNTIME</span><strong>Render + Neon 重启恢复通过</strong><p>公网 smoke 覆盖 R1、事件式 R2、执行检查点和严格前缀保留；服务重启后仍可读取 Mission、Revision 与 Event。</p></article>
       </div>
       <div class="evidence-actions">

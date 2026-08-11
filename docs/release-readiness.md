@@ -1,10 +1,12 @@
 # FieldPilot 0.6.0 发布验收清单
 
-验收日期：2026-08-10
+验收日期：2026-08-12
 
 发布候选分支：`release/fieldpilot-closure-20260810`
 
-发布前稳定回滚点：`134d436`（当前 `main`，上一版公网项目站与后端已验证）
+发布前稳定回滚点：`134d436`
+
+生产合并点：`c41b51b`（PR #15）
 
 ## 本地已验证
 
@@ -29,19 +31,21 @@
 - [x] 三轮数据来自三个代码版本，每个版本每场景调用一次；不把它表述为同一版本三次重复，也不声明跨重复稳定率。
 - [x] Live Eval 与 Mock 数据集、指标和 artifact 分离；任何 fallback 都会让 Live 工作流失败。
 
-## 上一版公网已验证
+## 0.6.0 公网已验证
 
 - [x] Netlify 项目站与工作台：<https://fieldpilot-kxh.netlify.app/>、<https://fieldpilot-kxh.netlify.app/workbench>。
-- [x] 2026-08-10 只读复核：Netlify 两个入口均返回 200；Render health/ready 可用并明确报告当前线上仍为 `0.5.0-dev`、Mock LLM 与 Fixture Provider。
-- [x] 当前生产 deploy `6a6f2177f207a9dccf2184db` 已验证根路径、工作台、SPA 回退、JS/CSS CDN、CSP 与浏览器主链路。
-- [x] Render API：<https://fieldpilot-api-t7m6.onrender.com/api/health>；health/ready、精确 CORS、完整 R1/R2 smoke 和重启恢复均通过。
-- [x] Neon PostgreSQL 上一版已迁移到 `20260731_0004`，数据在 Render 重启后仍可读取。
+- [x] Netlify deploy `6a7b65c4c0df50fb6e96d2b5` 的根路径、工作台、SPA 回退、指纹化 JS/CSS 与 CSP 均通过。
+- [x] Render health 报告 `0.6.0`、Mock LLM、Fixture Provider；ready 报告 Neon reachable，并显示 Amap/LLM/manual inventory 均未配置。
+- [x] Neon PostgreSQL 已迁移到 `20260810_0005`；生产 Mission `msn-cd05f03d864b4dd78a07` 保存两版不可变政策快照。
+- [x] 生产 R1～R5 smoke 通过，四类事件均为 `applied`，受扰候选被排除且五段受保护前缀保持不变。
+- [x] 生产 CORS 只向正式 Netlify origin 返回许可；随机 origin 无许可。
+- [x] 真实浏览器显示 `API ok`、Mock/Fixture 边界，并完成杭州示例解析、方案生成和激活。
 
-## 需要人工审批或外部凭证
+## 剩余外部凭证与复核
 
-- [ ] 审查并合并 `release/fieldpilot-closure-20260810` 到 `main`，触发 GitHub Actions、Render 和 Netlify 生产发布。
-- [ ] 确认 Neon 生产迁移到 `20260810_0005`，再验证 `/api/ready`、完整 R1/R2、四类事件和重启恢复。
-- [ ] 确认 Netlify 生产页显示 `0.6.0`、55 项测试口径、运行边界和新事件工作台。
+- [x] `release/fieldpilot-closure-20260810` 已通过 PR #15 合并，main CI 两次 PR 校验和合并后校验均成功。
+- [x] Neon/Render/Netlify 已发布 `0.6.0`，并完成完整 R1～R5 与浏览器复验。
+- [ ] 证据提交触发 Render 重启后读取上述 smoke Mission，完成本版本的重启恢复复核。
 - [ ] 配置 GitHub secret `FIELD_PILOT_AMAP_API_KEY`，手动运行 `fieldpilot-amap-provider-validation` 并保存脱敏报告。
 - [ ] 只有需要浏览器交互地图时才配置独立 Web JS Key 与安全码；后端 Web Service Key 不得进入前端。
 
@@ -56,4 +60,4 @@ cd D:\CODEX\agent-portfolio\fieldpilot\backend
   --base-url https://fieldpilot-api-t7m6.onrender.com/api
 ```
 
-生产发布未完成前，只能说“0.6.0 发布候选已本地验收”，不能把新迁移和新事件过滤写成已在公网验证。
+公开环境仍使用 Mock LLM 与 Fixture Provider；不得把授权人工导入能力、真实 Eval 或待配置的高德 Provider 表述为线上实时库存。

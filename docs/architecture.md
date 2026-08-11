@@ -76,4 +76,4 @@ SQLAlchemy/Alembic 管理 Mission、VisitTask、ExpensePolicyVersion、PlanRevis
 
 ## 8. 交付边界
 
-本地 `0.6.0` 已验证 SQLite、55 项 Pytest、Alembic `20260810_0005` 往返、不可变政策版本、授权人工库存、风险候选过滤，以及工作台/专题页两种 Vue 生产构建。上一版 Neon、Render Docker/FastAPI 与 Netlify 已完成 health/ready、R1/R2 smoke、精确 CORS、持久化和重启恢复验证；Kimi K2.6 已完成 15 场景真实模型评测。公开环境继续使用 Mock LLM 与 Fixture Provider；`0.6.0` 公网升级需在发布审批后复验，不具备真实预订、生产限流、多租户隔离或 SLA。
+`0.6.0` 已验证 SQLite、55 项 Pytest、Alembic `20260810_0005` 往返、不可变政策版本、授权人工库存、风险候选过滤，以及工作台/专题页两种 Vue 生产构建；Neon、Render Docker/FastAPI 与 Netlify 已完成 health/ready、R1～R5 smoke、政策历史、精确 CORS、SPA/CSP 和浏览器工作台复验。Kimi K2.6 已完成 15 场景真实模型评测。公开环境继续使用 Mock LLM 与 Fixture Provider，不具备真实预订、生产限流、多租户隔离或 SLA。
