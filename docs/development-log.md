@@ -370,3 +370,12 @@ Stage 4B：增加 AgentRun/DecisionTrace 持久化与请求幂等，建立版本
 - 公网只读复核确认 Netlify 首页/工作台均为 200，Render health/ready 可用；线上仍为 `0.5.0-dev`、Mock LLM、Fixture Provider，未把本地 `0.6.0` 能力误记为已发布。
 - 本地启动真实 Uvicorn HTTP 进程执行扩展 smoke，依次生成 R1～R5，覆盖任务改期、预算快照、交通取消和天气风险；四类事件均为 `applied`，政策快照序列为 2，R3 绑定当前快照，取消候选未进入 R4，且检查点受保护前缀逐段不变。
 - 当前仍是本地发布候选。Neon `0005`、Render `0.6.0`、Netlify 新产物、生产 smoke 和真实高德 Key 验收均保留到人工审批后执行，未把本地证据写成公网事实。
+
+## 2026-08-12｜Stage 17：0.6.0 生产发布与全链路复验
+
+- 发布分支通过 PR #15 合并为 `main@c41b51b`；两次 PR CI 与合并后 main CI 均通过，包含 55 项测试、Alembic 往返、真实 HTTP smoke 和工作台/showcase 双构建。
+- Render 自动部署后 `/api/health` 报告 `0.6.0`，`/api/ready` 确认 Neon reachable；新就绪字段表明 Amap、LLM 与 manual inventory 未配置，公开运行模式仍为 Mock/Fixture。
+- Netlify 生产 deploy `6a7b65c4c0df50fb6e96d2b5` 上线。根路径、`/workbench`、SPA 回退、指纹化资源、CSP 和 `0.6.0`/`55 passed` 页面口径均通过。
+- 生产 R1～R5 smoke 创建 Mission `msn-cd05f03d864b4dd78a07`；四类事件均 applied，政策快照 sequence 1→2 且 R3 绑定新快照，取消候选被排除，五段受保护前缀保持不变。
+- CORS 正例只返回正式 Netlify origin，随机 origin 无许可；真实浏览器显示 `API ok` 与 Mock/Fixture 边界，并完成杭州示例的解析、方案生成和激活。
+- 真实高德 Web Service Key 尚未配置，仍不声明线上实时路线、餐饮、票价、酒店库存或预订能力。

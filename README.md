@@ -67,7 +67,7 @@ FieldPilot 面向经常跨省市出差的外勤人员，把口语描述中的地
 
 [FieldPilot 在线项目站](https://fieldpilot-kxh.netlify.app/) 使用 Vite `showcase` 构建模式展示业务问题、Agent Harness 组成、完整运行链路、Eval 驱动修正、检查点后缀重规划和验证边界；同一构建的 [`/workbench`](https://fieldpilot-kxh.netlify.app/workbench) 连接 [Render API](https://fieldpilot-api-t7m6.onrender.com/api/health)，可实际完成任务解释、持久化、规划、执行检查点与事件式重规划。
 
-当前生产部署为 Netlify deploy `6a6f2177f207a9dccf2184db`。已验证根路径与 `/workbench` 返回 HTTPS 200、指纹化 JS/CSS 由 CDN 正确提供，CSP 只允许指定 Render API；Render 只向正式 Netlify origin 返回 CORS 许可，随机预览域名会被拒绝。在线浏览器已显示 `API ok`，杭州示例解析为可提交的两任务严格草案。
+当前生产部署为 Netlify deploy `6a7b65c4c0df50fb6e96d2b5`，后端为 Render `0.6.0`。已验证根路径与 `/workbench` 返回 HTTPS 200、指纹化 JS/CSS 由 CDN 正确提供，CSP 只允许指定 Render API；Render 只向正式 Netlify origin 返回 CORS 许可，随机 origin 不获得许可。在线浏览器已显示 `API ok`，并完成杭州示例的解析、方案生成与激活。
 
 ## 本地运行
 
@@ -146,7 +146,7 @@ cd ..\frontend
 npm run build
 ```
 
-当前结果（2026-08-10）：后端 `55 passed`；本地 SQLite 已完成 Alembic `20260810_0005 (head)` 升级、schema check、回退与重升；真实 Uvicorn HTTP 进程完成 R1～R5 smoke，覆盖任务改期、预算快照、交通取消、天气风险和严格前缀保护；完整工作台与项目专题两种前端生产构建成功。Kimi K2.6 的既有 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%，每个代码版本每场景调用一次，不声明跨重复稳定率。上一版公网链路已验证；`0.6.0` 的 Neon/Render/Netlify 生产发布需在合并审批后执行。详细记录见 [开发日志](docs/development-log.md)。
+当前结果（2026-08-12）：后端 `55 passed`；本地 SQLite 已完成 Alembic `20260810_0005 (head)` 升级、schema check、回退与重升；真实 Uvicorn 与 Render 公网环境均完成 R1～R5 smoke，覆盖任务改期、预算快照、交通取消、天气风险和严格前缀保护；完整工作台与项目专题两种前端生产构建成功。Kimi K2.6 的既有 15 场景最终全量 run 为 15/15 live、状态与安全标签准确率 100%、选定字段精确率 94.87%、澄清字段精确率 93.33%，每个代码版本每场景调用一次，不声明跨重复稳定率。`0.6.0` 已部署至 Neon/Render/Netlify；公开环境仍明确使用 Mock LLM 与 Fixture Provider。详细记录见 [开发日志](docs/development-log.md)。
 
 运行中的完整 HTTP 冒烟（需要先启动后端）：
 
